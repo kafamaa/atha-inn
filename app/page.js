@@ -7,13 +7,14 @@ export const revalidate = 60;
 
 async function load() {
   try {
-    const [i, r] = await Promise.all([
+    const [i, r, s] = await Promise.all([
       supabase.from('public_info').select('*').maybeSingle(),
       supabase.from('public_rooms').select('*').order('sort').order('name'),
+      supabase.from('public_staff').select('*').order('sort').order('name'),
     ]);
-    return { info: i.data || {}, rooms: r.data || [] };
+    return { info: i.data || {}, rooms: r.data || [], staff: s.data || [] };
   } catch {
-    return { info: {}, rooms: [] };
+    return { info: {}, rooms: [], staff: [] };
   }
 }
 
@@ -38,7 +39,7 @@ function LagoonArt() {
 }
 
 export default async function Home() {
-  const { info, rooms } = await load();
+  const { info, rooms, staff } = await load();
   const name = info.name || 'Atha Inn';
   const cur = info.base || 'MVR';
   const wa = info.whatsapp || '9607587079';
@@ -78,6 +79,25 @@ export default async function Home() {
           ))}
         </div>
       </section>
+
+      {staff.length ? (
+        <section className="section" id="staff">
+          <h2>Meet our team</h2>
+          <p className="muted">Friendly and knowledgeable local staff ready to help you have a wonderful stay.</p>
+          <div className="staff-grid">
+            {staff.map((s) => (
+              <article className="staff-card" key={s.id}>
+                {s.photo ? <img className="staff-photo" src={s.photo} alt={s.name} /> : <div className="staff-photo-empty">{s.name.charAt(0)}</div>}
+                <div className="staff-info">
+                  <h3>{s.name}</h3>
+                  <p className="muted small">{s.role}</p>
+                  {s.bio ? <p className="staff-bio">{s.bio}</p> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="band-sand" id="about">
         <section className="section">

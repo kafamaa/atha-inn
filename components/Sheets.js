@@ -468,7 +468,74 @@ function RequestSheet({ id }) {
   );
 }
 
+/* ---------- staff form ---------- */
+function StaffForm({ id, delete: isDel }) {
+  const { staff, run, close, confirm, toast } = useStaff();
+  const s = staff.find((x) => x.id === id) || {};
+  const [photo, setPhoto] = useState(s.photo || '');
+  const [busy, setBusy] = useState(false);
+  
+  async function upload(e) {
+    const f = e.target.files[0]; if (!f) return;
+    setBusy(true);
+    const blob = await resizeImage(f, 800);
+    const path = `staff/${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from('media').upload(path, blob, { contentType: 'image/jpeg' });
+    setBusy(false);
+    if (error) return toast(error.message);
+    setPhoto(supabase.storage.from('media').getPublicUrl(path).data.publicUrl);
+  }
+  
+  async function save(e) {
+    e.preventDefault();
+    const f = formData(e);
+    const row = { name: f.name.trim(), role: f.role.trim(), bio: f.bio, sort: +f.sort || 0, is_public: !!f.is_public, photo };
+    const q = id ? supabase.from('staff').update(row).eq('id', id) : supabase.from('staff').insert(row);
+    if (await run(q, 'Staff member saved')) close();
+  }
+  
+  async function del() {
+    if (!(await confirm('Delete this staff member from the directory?'))) return;
+    if (await run(supabase.from('staff').delete().eq('id', id), 'Staff member deleted')) close();
+  }
+  
+  if (isDel) {
+    return (
+      <Sheet title="Delete staff member?" onClose={close}>
+        <p>Remove <b>{s.name}</b> from the staff directory?</p>
+        <div className="actions">
+          <button className="btn danger" onClick={del}>Delete</button>
+          <button className="btn" onClick={close}>Keep</button>
+        </div>
+      </Sheet>
+    );
+  }
+  
+  return (
+    <Sheet title={id ? `Edit ${s.name}` : 'Add staff member'} onClose={close}>
+      <form onSubmit={save}>
+        <div className="fg">
+          <label>Name<input name="name" required defaultValue={s.name || ''} placeholder="Ahmed Hassan" /></label>
+          <label>Role<input name="role" required defaultValue={s.role || ''} placeholder="Manager" /></label>
+          <label>Order on website<input name="sort" type="number" defaultValue={s.sort || 0} /></label>
+          <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="is_public" defaultChecked={s.is_public ?? true} />Show on website</label>
+          <label className="full">Bio<textarea name="bio" defaultValue={s.bio || ''} placeholder="A brief introduction or background..." /></label>
+        </div>
+        <div className="row" style={{ marginTop: 12 }}>
+          {photo ? <img src={photo} alt="" style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 10 }} /> : null}
+          <label className="btn sm" style={{ color: 'var(--ink)' }}>{busy ? 'Uploading…' : photo ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" hidden onChange={upload} /></label>
+          {photo ? <button type="button" className="btn sm danger" onClick={() => setPhoto('')}>Remove photo</button> : null}
+        </div>
+        <div className="actions">
+          <button className="btn pri" disabled={busy}>Save staff member</button>
+          {id ? <button type="button" className="btn danger" onClick={del}>Delete</button> : null}
+        </div>
+      </form>
+    </Sheet>
+  );
+}
+
 export const SHEETS = {
   confirm: Confirm, room: RoomSheet, roomForm: RoomForm, booking: BookingSheet, bookingForm: BookingForm,
-  payment: PaymentForm, txnForm: TxnForm, billForm: BillForm, bill: BillSheet, request: RequestSheet,
+  payment: PaymentForm, txnForm: TxnForm, billForm: BillForm, bill: BillSheet, request: RequestSheet, staffForm: StaffForm,
 };

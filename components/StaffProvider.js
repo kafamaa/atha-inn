@@ -51,12 +51,13 @@ export default function StaffProvider({ children }) {
       supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
       supabase.from('secrets').select('*').eq('id', 1).maybeSingle(),
       supabase.from('profiles').select('*').order('created_at'),
+      supabase.from('staff').select('*').order('sort').order('name'),
     ]);
     const bad = q.find((x) => x.error);
     if (bad) toast(friendly(bad.error));
     setData({
       rooms: q[0].data || [], bookings: q[1].data || [], requests: q[2].data || [], bills: q[3].data || [],
-      txns: q[4].data || [], settings: q[5].data || {}, signature: q[6].data?.signature || '', staff: q[7].data || [],
+      txns: q[4].data || [], settings: q[5].data || {}, signature: q[6].data?.signature || '', staff: q[8].data || [],
     });
     setLoaded(true);
   }, [toast]);
@@ -97,7 +98,7 @@ export default function StaffProvider({ children }) {
   const value = { ...data, loaded, profile, isAdmin, reload, run, toast, open, close, replace, closeAll, confirm, session };
   const tabs = [
     ['/staff', 'Today'], ['/staff/bookings', 'Bookings'], ['/staff/requests', 'Requests', newReq],
-    ['/staff/rooms', 'Rooms'], ['/staff/bills', 'Bills'],
+    ['/staff/rooms', 'Rooms'], ['/staff/team', 'Staff'], ['/staff/bills', 'Bills'],
     ...(isAdmin ? [['/staff/money', 'Money'], ['/staff/settings', 'Settings']] : []),
   ];
   const nav = tabs.map(([h, l, n]) => (
@@ -121,7 +122,7 @@ export default function StaffProvider({ children }) {
         <nav className="tabs">{nav}</nav>
       </header>
       <main className="staff-main">{loaded ? children : <div className="empty">Loading…</div>}</main>
-      <nav className="nav-bottom">{nav.slice(0, isAdmin ? 6 : 5)}</nav>
+      <nav className="nav-bottom">{nav.slice(0, isAdmin ? 7 : 6)}</nav>
       {Cmp ? <Cmp key={top.key} {...top.props} /> : null}
       {msg ? <div className="toast" role="status">{msg}</div> : null}
     </StaffCtx.Provider>

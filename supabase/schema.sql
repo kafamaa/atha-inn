@@ -74,6 +74,18 @@ create table if not exists public.secrets (
 );
 insert into public.secrets (id) values (1) on conflict do nothing;
 
+-- ---------- staff directory ----------
+create table if not exists public.staff (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  role text not null default 'Staff',
+  bio text default '',
+  photo text default '',
+  sort int not null default 0,
+  is_public boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- rooms ----------
 create table if not exists public.rooms (
   id uuid primary key default gen_random_uuid(),
@@ -213,6 +225,7 @@ create index if not exists bills_booking on public.bills (booking_id);
 alter table public.profiles enable row level security;
 alter table public.settings enable row level security;
 alter table public.secrets enable row level security;
+alter table public.staff enable row level security;
 alter table public.rooms enable row level security;
 alter table public.bookings enable row level security;
 alter table public.booking_requests enable row level security;
@@ -242,6 +255,15 @@ drop policy if exists p_rooms_insert on public.rooms;
 create policy p_rooms_insert on public.rooms for insert to authenticated with check (public.is_admin());
 drop policy if exists p_rooms_delete on public.rooms;
 create policy p_rooms_delete on public.rooms for delete to authenticated using (public.is_admin());
+
+drop policy if exists p_staff_read on public.staff;
+create policy p_staff_read on public.staff for select to authenticated using (public.is_staff());
+drop policy if exists p_staff_update on public.staff;
+create policy p_staff_update on public.staff for update to authenticated using (public.is_staff()) with check (public.is_staff());
+drop policy if exists p_staff_insert on public.staff;
+create policy p_staff_insert on public.staff for insert to authenticated with check (public.is_admin());
+drop policy if exists p_staff_delete on public.staff;
+create policy p_staff_delete on public.staff for delete to authenticated using (public.is_admin());
 
 drop policy if exists p_bookings_rw on public.bookings;
 create policy p_bookings_rw on public.bookings for select to authenticated using (public.is_staff());
@@ -285,7 +307,9 @@ create or replace view public.public_info as
   select name, tagline, about, address, phones, whatsapp, email, map_url, logo_url, hero_url, base from public.settings where id = 1;
 create or replace view public.public_rooms as
   select id, name, type, rate, max_guests, description, photo, sort from public.rooms where is_public;
-grant select on public.public_info, public.public_rooms to anon, authenticated;
+create or replace view public.public_staff as
+  select id, name, role, bio, photo, sort from public.staff where is_public order by sort, name;
+grant select on public.public_info, public.public_rooms, public.public_staff to anon, authenticated;
 
 create or replace function public.available_rooms(ci date, co date)
 returns table (id uuid, name text, type text, rate numeric, max_guests int, description text, photo text)
