@@ -233,9 +233,9 @@ alter table public.bills enable row level security;
 alter table public.txns enable row level security;
 
 drop policy if exists p_profiles_read on public.profiles;
-create policy p_profiles_read on public.profiles for select to authenticated using (public.is_staff());
+create policy p_profiles_read on public.profiles for select to authenticated using (id = auth.uid());
 drop policy if exists p_profiles_admin on public.profiles;
-create policy p_profiles_admin on public.profiles for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy p_profiles_admin on public.profiles for update to authenticated using (id = auth.uid() AND role = 'admin') with check (id = auth.uid() AND role = 'admin');
 
 drop policy if exists p_settings_read on public.settings;
 create policy p_settings_read on public.settings for select to authenticated using (public.is_staff());
