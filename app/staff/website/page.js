@@ -187,8 +187,28 @@ function IslandGuideEditor() {
   const { settings, run, toast } = useStaff();
   const [items, setItems] = useState(() => Array.isArray(settings.island_guide) ? settings.island_guide : []);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(-1);
+  useEffect(() => {
+    if (Array.isArray(settings.island_guide)) setItems(settings.island_guide);
+  }, [settings.island_guide]);
+  async function addPhoto(e, index) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast('Please choose a photo.');
+    setUploading(index);
+    try {
+      const up = await uploadFile(file, 'island-guide');
+      patch(index, 'photo_url', up.url);
+      toast('Photo uploaded. Press Save island guide to publish it.');
+    } catch (error) {
+      toast(error.message || 'Could not upload photo');
+    } finally {
+      setUploading(-1);
+    }
+  }
   const patch = (index, key, value) => setItems((old) => old.map((x, i) => i === index ? { ...x, [key]: value } : x));
-  const add = () => setItems((old) => [...old, { type: 'sights', name: '', description: '', phone: '', published: true }]);
+  const add = () => setItems((old) => [...old, { type: 'sights', name: '', description: '', phone: '', photo_url: '', published: true }]);
   async function save() {
     if (items.some((x) => !x.name.trim())) return toast('Enter a name for every place, or remove empty entries');
     setSaving(true);
@@ -213,6 +233,16 @@ function IslandGuideEditor() {
                 <label>Phone (optional)<input value={item.phone || ''} onChange={(e) => patch(i, 'phone', e.target.value)} placeholder="7-digit Maldives number" inputMode="tel" /></label>
               </div>
               <label>Description<textarea rows={2} value={item.description || ''} onChange={(e) => patch(i, 'description', e.target.value)} placeholder="What should guests know?" /></label>
+              <div className="island-photo-editor">
+                {item.photo_url ? <img src={item.photo_url} alt={item.name || 'Island guide photo'} /> : <div className="island-photo-placeholder">No photo yet</div>}
+                <div className="grid" style={{ flex: 1 }}>
+                  <label className="btn sm" style={{ color: 'var(--ink)', cursor: 'pointer', width: 'fit-content' }}>
+                    {uploading === i ? 'Uploading…' : item.photo_url ? 'Change photo' : '+ Upload photo'}
+                    <input type="file" accept="image/*" hidden disabled={uploading !== -1 || saving} onChange={(e) => addPhoto(e, i)} />
+                  </label>
+                  {item.photo_url ? <button type="button" className="btn sm danger" style={{ width: 'fit-content' }} onClick={() => patch(i, 'photo_url', '')}>Remove photo</button> : null}
+                </div>
+              </div>
               <div className="row">
                 <label className="check"><input type="checkbox" checked={item.published !== false} onChange={(e) => patch(i, 'published', e.target.checked)} />Published on website</label>
                 <button className="btn sm danger" onClick={() => setItems((old) => old.filter((_, j) => i !== j))}>Remove</button>
@@ -224,7 +254,7 @@ function IslandGuideEditor() {
       {!items.length ? <p className="muted">No custom entries yet. Run the island guide database upgrade to load the initial Kanditheemu places, then add or edit them here.</p> : null}
       <div className="actions">
         <button className="btn" onClick={add}>+ Add place or service</button>
-        <button className="btn pri" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save island guide'}</button>
+        <button className="btn pri" disabled={saving || uploading !== -1} onClick={save}>{saving ? 'Saving…' : 'Save island guide'}</button>
       </div>
     </div>
   );
