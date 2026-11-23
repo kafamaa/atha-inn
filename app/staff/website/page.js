@@ -175,10 +175,65 @@ function Gallery() {
   );
 }
 
+
+const GUIDE_CATEGORIES = [
+  ['sights', 'Things to do'],
+  ['food', 'Restaurants & cafés'],
+  ['rides', 'Buggy & taxi'],
+  ['essentials', 'Food, rentals & services'],
+];
+
+function IslandGuideEditor() {
+  const { settings, run, toast } = useStaff();
+  const [items, setItems] = useState(() => Array.isArray(settings.island_guide) ? settings.island_guide : []);
+  const [saving, setSaving] = useState(false);
+  const patch = (index, key, value) => setItems((old) => old.map((x, i) => i === index ? { ...x, [key]: value } : x));
+  const add = () => setItems((old) => [...old, { type: 'sights', name: '', description: '', phone: '', published: true }]);
+  async function save() {
+    if (items.some((x) => !x.name.trim())) return toast('Enter a name for every place, or remove empty entries');
+    setSaving(true);
+    await run(supabase.from('settings').update({ island_guide: items }).eq('id', 1), 'Island guide saved. Your website updates within a minute.');
+    setSaving(false);
+  }
+  return (
+    <div className="card island-guide-admin">
+      <h2>Explore Kanditheemu</h2>
+      <p className="small muted">Manage places, restaurants, cafés, buggy/taxi contacts and other local services. Confirm details with providers before publishing. Changes appear on the public homepage.</p>
+      <div className="list">
+        {items.map((item, i) => (
+          <div className="item" key={i}>
+            <div className="grow grid">
+              <div className="fg">
+                <label>Category
+                  <select value={item.type || 'sights'} onChange={(e) => patch(i, 'type', e.target.value)}>
+                    {GUIDE_CATEGORIES.map(([id, label]) => <option value={id} key={id}>{label}</option>)}
+                  </select>
+                </label>
+                <label>Name<input value={item.name || ''} onChange={(e) => patch(i, 'name', e.target.value)} placeholder="Place or service name" /></label>
+                <label>Phone (optional)<input value={item.phone || ''} onChange={(e) => patch(i, 'phone', e.target.value)} placeholder="7-digit Maldives number" inputMode="tel" /></label>
+              </div>
+              <label>Description<textarea rows={2} value={item.description || ''} onChange={(e) => patch(i, 'description', e.target.value)} placeholder="What should guests know?" /></label>
+              <div className="row">
+                <label className="check"><input type="checkbox" checked={item.published !== false} onChange={(e) => patch(i, 'published', e.target.checked)} />Published on website</label>
+                <button className="btn sm danger" onClick={() => setItems((old) => old.filter((_, j) => i !== j))}>Remove</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!items.length ? <p className="muted">No custom entries yet. Run the island guide database upgrade to load the initial Kanditheemu places, then add or edit them here.</p> : null}
+      <div className="actions">
+        <button className="btn" onClick={add}>+ Add place or service</button>
+        <button className="btn pri" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save island guide'}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Website() {
   const [tab, setTab] = useState('home');
   useEffect(() => { const t = new URLSearchParams(window.location.search).get('tab'); if (t) setTab(t); }, []);
-  const tabs = [['home', 'Homepage'], ['rooms', 'Rooms'], ['gallery', 'Gallery'], ['info', 'Guesthouse & kitchen'], ['contact', 'Contact & location']];
+  const tabs = [['home', 'Homepage'], ['rooms', 'Rooms'], ['gallery', 'Gallery'], ['island', 'Island guide'], ['info', 'Guesthouse & kitchen'], ['contact', 'Contact & location']];
   return (
     <>
       <div className="pagehead">
@@ -186,7 +241,7 @@ export default function Website() {
         <a className="btn" href="/" target="_blank" rel="noopener">View website</a>
       </div>
       <div className="seg" style={{ marginBottom: 12 }}>{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
-      {tab === 'home' ? <Homepage /> : tab === 'rooms' ? <Rooms /> : tab === 'gallery' ? <Gallery /> : tab === 'info' ? (
+      {tab === 'home' ? <Homepage /> : tab === 'rooms' ? <Rooms /> : tab === 'gallery' ? <Gallery /> : tab === 'island' ? <IslandGuideEditor /> : tab === 'info' ? (
         <SettingsForm fields={[
           ['about', 'About the guesthouse', 'area', 'Who you are, what guests love about staying with you'],
           ['house_info', 'Guesthouse information', 'area', 'Check-in 2 pm, check-out 12 pm\nAirport / ferry transfers on request\nHouse rules…'],
