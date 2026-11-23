@@ -10,6 +10,7 @@ export default function PublicNav({ info }) {
         </Link>
         <nav>
           <Link href="/#rooms">Rooms</Link>
+          <Link href="/#discover">Explore Kanditheemu</Link>
           <Link href="/#about">About</Link>
           <Link href="/#gallery">Gallery</Link>
           <Link href="/#contact">Contact</Link>
