@@ -177,3 +177,24 @@ label>input,label>select,label>textarea{margin-top:4px;color:var(--ink);font-wei
  body{background:#fff}.staff-main{padding:0;max-width:none}
  .paper{border:0;padding:0}
 }
+
+/* Discover Kanditheemu – public island directory */
+.discover-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.discover-heading h2{margin-bottom:8px}
+.discover-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:var(--lag);margin:0 0 6px}
+.discover-jumps{display:flex;gap:8px;overflow-x:auto;margin:20px 0 26px;padding-bottom:4px}
+.discover-jumps a{padding:9px 15px;border-radius:99px;background:#fff;border:1px solid var(--line);white-space:nowrap;font-size:14px;font-weight:700;text-decoration:none}
+.discover-group{scroll-margin-top:90px;margin:30px 0}
+.discover-group h3{font-size:23px}
+.discover-group>p{margin:5px 0 14px}
+.discover-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px}
+.discover-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:18px;border:1px solid var(--line);background:#fff;border-radius:18px;min-height:175px}
+.discover-card h4{font-size:17px;margin:0 0 6px}
+.discover-card p{color:var(--mute);font-size:14px;margin:0}
+.discover-icon{display:grid;place-items:center;background:var(--soft);height:42px;width:42px;border-radius:12px;font-size:23px}
+.discover-contact{margin-top:auto;color:var(--lag);text-decoration:none;font-size:14px;font-weight:800;padding:7px 0}
+.discover-note{max-width:720px;margin:22px 0 0}
+.island-guide-admin .item input,.island-guide-admin .item textarea,.island-guide-admin .item select{width:100%;min-width:0}
+.island-guide-admin .item{align-items:start}
+@media(max-width:640px){.discover-heading{align-items:start}.discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.discover-card{padding:12px;min-height:170px}.discover-card h4{font-size:15px}.discover-card p{font-size:12px}.discover-group h3{font-size:20px}.discover-contact{font-size:12px}}
+@media(max-width:390px){.discover-grid{grid-template-columns:1fr}.discover-card{min-height:0}}
