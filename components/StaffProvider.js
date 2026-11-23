@@ -14,6 +14,7 @@ export default function StaffProvider({ children }) {
   const path = usePathname();
   const [session, setSession] = useState(undefined);
   const [profile, setProfile] = useState(undefined);
+  const [profileError, setProfileError] = useState('');
   const [data, setData] = useState(EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [msg, setMsg] = useState('');
@@ -35,8 +36,13 @@ export default function StaffProvider({ children }) {
   useEffect(() => {
     if (session === null) { router.replace('/login'); return; }
     if (!session) return;
-    supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
-      .then(({ data: p }) => setProfile((old) => (old && p && old.id === p.id && old.role === p.role ? old : p || null)));
+    setProfileError('');
+    supabase.from('profiles').select('id, name, email, role').eq('id', session.user.id).maybeSingle()
+      .then(({ data: p, error }) => {
+        setProfileError(error ? error.message : '');
+        setProfile((old) => (old && p && old.id === p.id && old.role === p.role ? old : p || null));
+      })
+      .catch((error) => { setProfileError(error.message || 'Profile lookup failed'); setProfile(null); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, session === null]);
 
@@ -85,8 +91,13 @@ export default function StaffProvider({ children }) {
   if (!profile) {
     return (
       <main className="book-wrap"><div className="card">
-        <h1 style={{ fontSize: 22 }}>No staff access</h1>
-        <p>This account ({session.user.email}) is not set up as staff. Ask an admin to add you in Settings → Admin accounts.</p>
+        <h1 style={{ fontSize: 22 }}>Admin access unavailable</h1>
+        <p>{profileError ? 'Supabase could not read your Admin profile.' : 'No Admin profile was returned for this signed-in user.'}</p>
+        {profileError ? <p className="out">Database error: {profileError}</p> : null}
+        <p className="small muted">Signed in: {session.user.email}</p>
+        <p className="small muted" style={{ overflowWrap: 'anywhere' }}>Account ID: {session.user.id}</p>
+        <p className="small muted" style={{ overflowWrap: 'anywhere' }}>Connected database: {new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname}</p>
+        <p className="small muted">Confirm that the account ID matches the ID in your Supabase profiles table. If it matches, check the profiles SELECT policy.</p>
         <button className="btn" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </div></main>
     );
