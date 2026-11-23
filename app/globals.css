@@ -198,3 +198,10 @@ label>input,label>select,label>textarea{margin-top:4px;color:var(--ink);font-wei
 .island-guide-admin .item{align-items:start}
 @media(max-width:640px){.discover-heading{align-items:start}.discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.discover-card{padding:12px;min-height:170px}.discover-card h4{font-size:15px}.discover-card p{font-size:12px}.discover-group h3{font-size:20px}.discover-contact{font-size:12px}}
 @media(max-width:390px){.discover-grid{grid-template-columns:1fr}.discover-card{min-height:0}}
+
+/* Island guide photos */
+.discover-photo{width:calc(100% + 36px);height:150px;object-fit:cover;display:block;margin:-18px -18px 0;border-radius:17px 17px 0 0}
+.island-photo-editor{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.island-photo-editor img,.island-photo-placeholder{width:150px;height:96px;border-radius:12px;object-fit:cover;background:var(--soft)}
+.island-photo-placeholder{display:grid;place-items:center;color:var(--mute);font-size:13px}
+@media(max-width:640px){.discover-photo{width:calc(100% + 24px);height:115px;margin:-12px -12px 0;border-radius:11px 11px 0 0}}
