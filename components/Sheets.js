@@ -3,13 +3,44 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staffContext';
 import { Sheet, Opts, Chip } from '@/components/ui';
-import BillPaper from '@/components/BillPaper';
+import BillPaper, { ReceiptPaper } from '@/components/BillPaper';
 import {
-  BST, CAT_IN, CAT_OUT, METH, SRC, addD, billState, calc, conv, dL, dS, lineTot, money, nights, num, paidOf,
-  qtyLines, r2, resizeImage, roomState, today, waLink, waNum,
+  BST, CAT_IN, CAT_OUT, METH, PAY_KINDS, SRC, addD, billState, calc, conv, dL, dS, friendly, gid, groupOf, lineTot, money,
+  nights, num, paidOf, qtyLines, r2, resizeImage, roomState, today, waLink, waNum,
 } from '@/lib/util';
 
 const formData = (e) => Object.fromEntries(new FormData(e.currentTarget));
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => ((Math.random() * 16) | 0).toString(16)));
+
+/* ---------- reservation helpers ---------- */
+// one entry per reservation (a reservation may hold several rooms)
+export function reservations(bookings) {
+  const m = new Map();
+  bookings.forEach((b) => { const k = gid(b); if (!m.has(k)) m.set(k, { ...b, rows: [] }); m.get(k).rows.push(b); });
+  return [...m.values()];
+}
+export const resRooms = (rows, rooms) => rows.map((x) => rooms.find((r) => r.id === x.room_id)).filter(Boolean);
+export function resCharge(rows) {
+  return rows.reduce((a, x) => {
+    if (x.status === 'cancel') return a;
+    const n = nights(x.check_in, x.check_out);
+    return a + n * (+x.rate || 0) * (x.room_id ? 1 : +x.rooms_wanted || 1);
+  }, 0);
+}
+export const resPaid = (g, txns, cur, fx) => txns.filter((t) => t.type === 'in' && t.booking_id === g).reduce((a, t) => a + conv(t.amount, t.currency, cur, fx), 0);
+
+function receiptSummary(t, { bills, bookings, txns, rooms, settings }) {
+  const inv = t.bill_id ? bills.find((b) => b.id === t.bill_id) : t.booking_id ? bills.find((b) => b.kind === 'invoice' && b.booking_id === t.booking_id) : null;
+  if (inv) return { label: `Invoice ${inv.no}`, total: calc(inv, settings).total, received: paidOf(inv, txns, settings.fx), currency: inv.currency };
+  if (!t.booking_id) return null;
+  const rows = bookings.filter((b) => gid(b) === t.booking_id);
+  if (!rows.length) return null;
+  const rn = resRooms(rows, rooms).map((r) => r.name).join(', ');
+  return {
+    label: `Accommodation${rn ? ' – Room ' + rn : ''}\n${dL(rows[0].check_in)} – ${dL(rows[0].check_out)}`,
+    total: resCharge(rows), received: resPaid(t.booking_id, txns, settings.base, settings.fx), currency: settings.base,
+  };
+}
 
 /* ---------- confirm ---------- */
 function Confirm({ text, yes, res }) {
@@ -25,16 +56,18 @@ function Confirm({ text, yes, res }) {
   );
 }
 
-/* ---------- booking list item (used in many places) ---------- */
+/* ---------- list items ---------- */
 export function BookingItem({ b, tag }) {
-  const { rooms, open } = useStaff();
-  const r = rooms.find((x) => x.id === b.room_id);
+  const { rooms, bookings, open } = useStaff();
+  const rows = groupOf(b, bookings);
+  const rn = resRooms(rows, rooms).map((r) => r.name);
   const s = BST[b.status] || BST.booked;
+  const roomsTxt = rn.length ? `Room${rn.length > 1 ? 's' : ''} ${rn.join(', ')}` : `${b.rooms_wanted || 1} room${(b.rooms_wanted || 1) > 1 ? 's' : ''} wanted`;
   return (
-    <button className="item" onClick={() => open('booking', { id: b.id })}>
+    <button className="item" onClick={() => open('booking', { g: gid(b) })}>
       <div className="grow">
         <b>{b.guest}</b>
-        <span className="small muted">{r ? r.name : 'No room'} · {dS(b.check_in)} → {dS(b.check_out)} · {nights(b.check_in, b.check_out)}n</span>
+        <span className="small muted">{roomsTxt} · {dS(b.check_in)} → {dS(b.check_out)} · {nights(b.check_in, b.check_out)}n</span>
       </div>
       <span className={`chip ${s[1]}`}>{tag || s[0]}</span>
     </button>
@@ -52,13 +85,23 @@ export function BillItem({ b }) {
   );
 }
 
+export function ReceiptItem({ t }) {
+  const { open } = useStaff();
+  return (
+    <button className="item" onClick={() => open('receipt', { id: t.id })}>
+      <div className="grow"><b>{t.payer || t.note || 'Payment'}</b><span className="small muted">{t.receipt_no || 'No receipt no.'} · {dS(t.date)} · {t.pay_kind || 'Payment'} · {t.method}</span></div>
+      <span className="amt in">{money(t.amount, t.currency)}</span>
+    </button>
+  );
+}
+
 /* ---------- rooms ---------- */
 function RoomSheet({ id }) {
-  const { rooms, bookings, run, open, close, isAdmin, settings } = useStaff();
+  const { rooms, bookings, run, open, close, settings } = useStaff();
   const r = rooms.find((x) => x.id === id);
   if (!r) return null;
   const s = roomState(r, bookings);
-  const fut = bookings.filter((b) => b.room_id === id && b.status === 'booked' && b.check_in >= today()).slice(0, 4);
+  const fut = bookings.filter((b) => b.room_id === id && b.status === 'booked' && b.check_in > today()).sort((a, b) => a.check_in.localeCompare(b.check_in)).slice(0, 4);
   const setStatus = async (k) => { if (await run(supabase.from('rooms').update({ status: k }).eq('id', id), 'Room updated')) close(); };
   return (
     <Sheet title={`Room ${r.name}`} onClose={close}>
@@ -70,10 +113,10 @@ function RoomSheet({ id }) {
           <button key={k} className={`btn sm ${r.status === k ? 'pri' : ''}`} onClick={() => setStatus(k)}>{l}</button>
         ))}
       </div>
-      {fut.length ? <><h3 style={{ fontSize: 15, margin: '14px 0 6px' }}>Coming up</h3><div className="list">{fut.map((b) => <BookingItem key={b.id} b={b} />)}</div></> : null}
+      {fut.length ? <><h3 style={{ fontSize: 15, margin: '14px 0 6px' }}>Reserved next</h3><div className="list">{fut.map((b) => <BookingItem key={b.id} b={b} />)}</div></> : null}
       <div className="actions">
-        <button className="btn coral" onClick={() => open('bookingForm', { pre: { room_id: id } })}>+ Book this room</button>
-        {isAdmin ? <button className="btn" onClick={() => open('roomForm', { id })}>Edit room</button> : null}
+        <button className="btn coral" onClick={() => open('bookingForm', { pre: { room_ids: [id] } })}>+ Book this room</button>
+        <button className="btn" onClick={() => open('roomForm', { id })}>Edit room</button>
       </div>
     </Sheet>
   );
@@ -87,26 +130,28 @@ function RoomForm({ id }) {
   async function upload(e) {
     const f = e.target.files[0]; if (!f) return;
     setBusy(true);
-    const blob = await resizeImage(f, 1400);
-    const path = `rooms/${Date.now()}.jpg`;
-    const { error } = await supabase.storage.from('media').upload(path, blob, { contentType: 'image/jpeg' });
+    try {
+      const blob = await resizeImage(f, 1600);
+      const path = `rooms/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from('media').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      setPhoto(supabase.storage.from('media').getPublicUrl(path).data.publicUrl);
+    } catch (err) { toast(err.message || 'Upload failed'); }
     setBusy(false);
-    if (error) return toast(error.message);
-    setPhoto(supabase.storage.from('media').getPublicUrl(path).data.publicUrl);
   }
   async function save(e) {
     e.preventDefault();
     const f = formData(e);
-    const row = { name: f.name.trim(), type: f.type, rate: +f.rate || 0, max_guests: +f.max_guests || 1, description: f.description, notes: f.notes, sort: +f.sort || 0, is_public: !!f.is_public, photo };
+    const row = { name: f.name.trim(), type: f.type, rate: +f.rate || 0, max_guests: +f.max_guests || 1, description: f.description, facilities: f.facilities, notes: f.notes, sort: +f.sort || 0, is_public: !!f.is_public, photo };
     const q = id ? supabase.from('rooms').update(row).eq('id', id) : supabase.from('rooms').insert(row);
     if (await run(q, 'Room saved')) close();
   }
   async function del() {
-    if (!(await confirm('Delete this room? Its old bookings stay but lose their room.'))) return;
+    if (!(await confirm('Delete this room? Old reservations stay but lose their room.'))) return;
     if (await run(supabase.from('rooms').delete().eq('id', id), 'Room deleted')) close();
   }
   return (
-    <Sheet title={id ? 'Edit room' : 'Add room'} onClose={close}>
+    <Sheet title={id ? `Edit room ${r.name}` : 'Add room'} onClose={close}>
       <form onSubmit={save}>
         <div className="fg">
           <label>Room name / number<input name="name" required defaultValue={r.name || ''} placeholder="101" /></label>
@@ -114,61 +159,99 @@ function RoomForm({ id }) {
           <label>Price per night ({settings.base})<input name="rate" type="number" step="0.01" min="0" defaultValue={r.rate ?? ''} /></label>
           <label>Max guests<input name="max_guests" type="number" min="1" defaultValue={r.max_guests || 2} /></label>
           <label>Order on website<input name="sort" type="number" defaultValue={r.sort || 0} /></label>
-          <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="is_public" defaultChecked={r.is_public ?? true} />Show on website</label>
-          <label className="full">Description for guests<textarea name="description" defaultValue={r.description || ''} placeholder="Air-conditioned double room with private bathroom and hot water" /></label>
-          <label className="full">Staff notes<textarea name="notes" defaultValue={r.notes || ''} /></label>
+          <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="is_public" defaultChecked={r.is_public ?? true} />Published on website</label>
+          <label className="full">Facilities (comma separated)<input name="facilities" defaultValue={r.facilities || ''} placeholder="Air conditioning, Hot water, Wi-Fi, Private bathroom" /></label>
+          <label className="full">Description for guests<textarea name="description" defaultValue={r.description || ''} /></label>
+          <label className="full">Notes for admins (not shown to guests)<textarea name="notes" defaultValue={r.notes || ''} /></label>
         </div>
         <div className="row" style={{ marginTop: 12 }}>
           {photo ? <img src={photo} alt="" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 10 }} /> : null}
-          <label className="btn sm" style={{ color: 'var(--ink)' }}>{busy ? 'Uploading…' : photo ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" hidden onChange={upload} /></label>
+          <label className="btn sm" style={{ color: 'var(--ink)' }}>{busy ? 'Uploading…' : photo ? 'Change main photo' : 'Add main photo'}<input type="file" accept="image/*" hidden onChange={upload} /></label>
           {photo ? <button type="button" className="btn sm danger" onClick={() => setPhoto('')}>Remove photo</button> : null}
         </div>
+        <p className="small muted">More photos and videos for this room: Website & Gallery → Gallery.</p>
         <div className="actions">
           <button className="btn pri" disabled={busy}>Save room</button>
-          {id ? <button type="button" className="btn danger" onClick={del}>Delete</button> : null}
+          {id ? <button type="button" className="btn danger" onClick={del}>Delete room</button> : null}
         </div>
       </form>
     </Sheet>
   );
 }
 
-/* ---------- bookings ---------- */
-function BookingForm({ id, pre = {}, requestId }) {
-  const { rooms, bookings, run, close, replace, settings, toast } = useStaff();
-  const b = bookings.find((x) => x.id === id) || {};
-  const init = { ...b, ...pre };
+/* ---------- reservations ---------- */
+function BookingForm({ g, pre = {}, confirmMode }) {
+  const { rooms, bookings, settings, reload, toast, replace, close } = useStaff();
+  const rows = g ? bookings.filter((x) => gid(x) === g) : [];
+  const init = { ...(rows[0] || {}), ...pre };
   const [ci, setCi] = useState(init.check_in || today());
   const [co, setCo] = useState(init.check_out || addD(init.check_in || today(), 1));
-  const isFree = (rid, a, z) => !bookings.some((x) => x.id !== id && ['booked', 'in'].includes(x.status) && x.room_id === rid && a < x.check_out && x.check_in < z);
-  const firstRoom = init.room_id || (rooms.find((r) => r.status !== 'maint' && isFree(r.id, ci, co)) || rooms[0])?.id || '';
-  const [roomId, setRoomId] = useState(firstRoom);
-  const [rate, setRate] = useState(init.rate ?? rooms.find((r) => r.id === firstRoom)?.rate ?? 0);
-  if (!rooms.length) return <Sheet title="New booking" onClose={close}><p>Add a room first (Rooms tab).</p></Sheet>;
+  const [status, setStatus] = useState(confirmMode ? 'booked' : init.status || 'booked');
+  const isFree = (rid, a, z) => !bookings.some((x) => gid(x) !== g && ['booked', 'in'].includes(x.status) && x.room_id === rid && a < x.check_out && x.check_in < z);
+  const initSel = rows.filter((x) => x.room_id).map((x) => x.room_id);
+  const [sel, setSel] = useState(() => {
+    if (pre.room_ids) return pre.room_ids;
+    if (initSel.length) return initSel;
+    if (g) { // confirming a request: suggest free rooms
+      const want = init.rooms_wanted || 1;
+      return rooms.filter((r) => r.status !== 'maint' && isFree(r.id, ci, co)).slice(0, want).map((r) => r.id);
+    }
+    const f = rooms.find((r) => r.status !== 'maint' && isFree(r.id, ci, co));
+    return f ? [f.id] : [];
+  });
+  const [rate, setRate] = useState(init.rate || rooms.find((r) => r.id === sel[0])?.rate || 0);
+  const [busy, setBusy] = useState(false);
+  if (!rooms.length) return <Sheet title="New reservation" onClose={close}><p>Add rooms first: Website & Gallery → Rooms.</p></Sheet>;
   const n = nights(ci, co);
-  const clash = bookings.find((x) => x.id !== id && ['booked', 'in'].includes(x.status) && x.room_id === roomId && ci < x.check_out && x.check_in < co);
+  const count = sel.length || (status === 'request' ? +init.rooms_wanted || 1 : 0);
+  const busyRooms = sel.filter((rid) => !isFree(rid, ci, co));
+  const toggle = (rid) => {
+    if (!sel.length && !+rate) setRate(rooms.find((r) => r.id === rid)?.rate || 0);
+    setSel(sel.includes(rid) ? sel.filter((x) => x !== rid) : [...sel, rid]);
+  };
+
   async function save(e) {
     e.preventDefault();
     const f = formData(e);
     if (co <= ci) return toast('Check-out must be after check-in');
-    const row = {
-      guest: f.guest.trim(), phone: f.phone, email: f.email, country: f.country, id_no: f.id_no, room_id: roomId || null,
-      check_in: ci, check_out: co, adults: +f.adults || 1, children: +f.children || 0, rate: +rate || 0,
-      status: f.status, source: f.source, notes: f.notes,
+    if (!['request', 'cancel'].includes(status) && !sel.length) return toast('Choose at least one room');
+    if (['booked', 'in'].includes(status) && busyRooms.length) return toast('Some chosen rooms are already booked for these dates');
+    setBusy(true);
+    const G = g || newId();
+    const common = {
+      guest: f.guest.trim(), phone: f.phone, email: f.email, country: f.country, id_no: f.id_no, check_in: ci, check_out: co,
+      adults: +f.adults || 1, children: +f.children || 0, rate: +rate || 0, status, source: f.source, notes: f.notes,
+      rooms_wanted: sel.length || Math.max(1, +f.rooms_wanted || 1), group_id: G,
     };
-    let newId = id;
-    if (id) {
-      if (!(await run(supabase.from('bookings').update(row).eq('id', id), 'Booking saved'))) return;
+    const ops = [];
+    if (!sel.length) {
+      if (rows.length) {
+        rows.slice(1).forEach((x) => ops.push(() => supabase.from('bookings').delete().eq('id', x.id)));
+        ops.push(() => supabase.from('bookings').update({ ...common, room_id: null }).eq('id', rows[0].id));
+      } else ops.push(() => supabase.from('bookings').insert({ ...common, room_id: null }));
     } else {
-      if (requestId) row.request_id = requestId;
-      const d = await run(supabase.from('bookings').insert(row).select('id').single(), 'Booking saved');
-      if (!d) return;
-      newId = d.id;
-      if (requestId) await run(supabase.from('booking_requests').update({ status: 'accepted', booking_id: newId }).eq('id', requestId));
+      const keep = rows.filter((x) => x.room_id && sel.includes(x.room_id));
+      const spare = rows.filter((x) => !keep.includes(x));
+      const add = sel.filter((rid) => !keep.some((k) => k.room_id === rid));
+      const reuse = spare.slice(0, add.length);
+      spare.slice(add.length).forEach((x) => ops.push(() => supabase.from('bookings').delete().eq('id', x.id)));
+      // free up reused rows first so rooms can move between them
+      reuse.forEach((x) => ops.push(() => supabase.from('bookings').update({ status: 'cancel', room_id: null }).eq('id', x.id)));
+      keep.forEach((x) => ops.push(() => supabase.from('bookings').update({ ...common, room_id: x.room_id }).eq('id', x.id)));
+      reuse.forEach((x, i) => ops.push(() => supabase.from('bookings').update({ ...common, room_id: add[i] }).eq('id', x.id)));
+      add.slice(reuse.length).forEach((rid) => ops.push(() => supabase.from('bookings').insert({ ...common, room_id: rid })));
     }
-    replace('booking', { id: newId });
+    let err = null;
+    for (const op of ops) { const { error } = await op(); if (error) { err = error; break; } }
+    await reload();
+    setBusy(false);
+    if (err) return toast(friendly(err));
+    toast(confirmMode ? 'Reservation confirmed' : 'Reservation saved');
+    replace('booking', { g: G });
   }
+
   return (
-    <Sheet title={id ? 'Edit booking' : 'New booking'} onClose={close}>
+    <Sheet title={confirmMode ? 'Confirm request & assign rooms' : g ? 'Edit reservation' : 'New reservation'} onClose={close}>
       <form onSubmit={save}>
         <div className="fg">
           <label>Guest name<input name="guest" required defaultValue={init.guest || ''} /></label>
@@ -176,107 +259,170 @@ function BookingForm({ id, pre = {}, requestId }) {
           <label>Email<input name="email" type="email" defaultValue={init.email || ''} /></label>
           <label>Country<input name="country" defaultValue={init.country || ''} /></label>
           <label>Passport / ID no.<input name="id_no" defaultValue={init.id_no || ''} /></label>
-          <label>Room<select value={roomId} onChange={(e) => { setRoomId(e.target.value); setRate(rooms.find((r) => r.id === e.target.value)?.rate || 0); }}>
-            <Opts list={rooms.map((r) => [r.id, `${r.name}${r.type ? ' · ' + r.type : ''}`])} /></select></label>
-          <label>Check-in<input type="date" required value={ci} onChange={(e) => { setCi(e.target.value); if (co <= e.target.value) setCo(addD(e.target.value, 1)); }} /></label>
-          <label>Check-out<input type="date" required value={co} onChange={(e) => setCo(e.target.value)} /></label>
+          <label>Booked via<select name="source" defaultValue={init.source || 'Walk-in'}><Opts list={SRC} /></select></label>
+          <label>Arrival (check-in)<input type="date" required value={ci} onChange={(e) => { setCi(e.target.value); if (co <= e.target.value) setCo(addD(e.target.value, 1)); }} /></label>
+          <label>Departure (check-out)<input type="date" required value={co} onChange={(e) => setCo(e.target.value)} /></label>
           <label>Adults<input name="adults" type="number" min="1" defaultValue={init.adults || 2} /></label>
           <label>Children<input name="children" type="number" min="0" defaultValue={init.children || 0} /></label>
-          <label>Price per night ({settings.base})<input type="number" step="0.01" min="0" value={rate} onChange={(e) => setRate(e.target.value)} /></label>
-          <label>Booked via<select name="source" defaultValue={init.source || (requestId ? 'Website' : 'Walk-in')}><Opts list={SRC} /></select></label>
-          <label>Status<select name="status" defaultValue={init.status || 'booked'}><Opts list={[['booked', 'Booked'], ['in', 'Checked in'], ['out', 'Checked out'], ['cancel', 'Cancelled']]} /></select></label>
-          <label className="full">Notes (flight, transfer, requests)<textarea name="notes" defaultValue={init.notes || ''} /></label>
+          <label>Status<select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <Opts list={[['request', 'New request'], ['booked', 'Confirmed'], ['in', 'Checked in'], ['out', 'Checked out'], ['cancel', 'Cancelled']]} /></select></label>
+          <label>Price per room / night ({settings.base})<input type="number" step="0.01" min="0" value={rate} onChange={(e) => setRate(e.target.value)} /></label>
+          {status === 'request' && !sel.length ? <label>Rooms wanted<input name="rooms_wanted" type="number" min="1" defaultValue={init.rooms_wanted || 1} /></label> : null}
         </div>
-        <p className="muted">{n} night{n === 1 ? '' : 's'} × {money(rate, settings.base)} = <b>{money(n * (+rate || 0), settings.base)}</b></p>
-        {clash ? <p className="out">Room already booked by {clash.guest} ({dS(clash.check_in)}–{dS(clash.check_out)}). Choose another room or dates.</p> : null}
-        <div className="actions"><button className="btn pri">Save booking</button></div>
+        <h3 style={{ fontSize: 15, margin: '16px 0 6px' }}>Rooms {sel.length ? `(${sel.length} chosen)` : ''}</h3>
+        <div className="roompick">
+          {rooms.map((r) => {
+            const free = isFree(r.id, ci, co);
+            const on = sel.includes(r.id);
+            return (
+              <label key={r.id} className={`rp ${on ? 'on' : ''} ${free ? '' : 'busy'}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(r.id)} disabled={!free && !on} />
+                <b>{r.name}</b><span className="small">{free ? (r.status === 'maint' ? 'Maintenance' : r.type || 'Free') : 'Booked'}</span>
+              </label>
+            );
+          })}
+        </div>
+        <div className="calcbox">
+          {count} room{count === 1 ? '' : 's'} × {n} night{n === 1 ? '' : 's'} × {money(rate, settings.base)} = <b>{money(count * n * (+rate || 0), settings.base)}</b>
+        </div>
+        {busyRooms.length ? <p className="out">Already booked for these dates: {busyRooms.map((rid) => rooms.find((r) => r.id === rid)?.name).join(', ')}</p> : null}
+        <label style={{ marginTop: 12 }}>Notes (flight, transfer, requests)<textarea name="notes" defaultValue={init.notes || ''} /></label>
+        <div className="actions"><button className="btn pri" disabled={busy}>{busy ? 'Saving…' : confirmMode ? 'Confirm reservation' : 'Save reservation'}</button></div>
       </form>
     </Sheet>
   );
 }
 
-function BookingSheet({ id }) {
-  const { bookings, rooms, bills, txns, settings, run, open, close, confirm, isAdmin } = useStaff();
-  const b = bookings.find((x) => x.id === id);
-  if (!b) return null;
-  const r = rooms.find((x) => x.id === b.room_id);
+function BookingSheet({ g, id }) {
+  const { bookings, rooms, bills, txns, settings, run, open, close, confirm } = useStaff();
+  const G = g || gid(bookings.find((x) => x.id === id) || {});
+  const rows = bookings.filter((x) => gid(x) === G);
+  if (!rows.length) return null;
+  const b = rows[0];
+  const rr = resRooms(rows, rooms);
   const n = nights(b.check_in, b.check_out);
   const s = BST[b.status] || BST.booked;
-  const inv = bills.find((x) => x.kind === 'invoice' && x.booking_id === id);
-  const pays = txns.filter((t) => t.type === 'in' && t.booking_id === id);
-  const paid = pays.reduce((a, t) => a + conv(t.amount, t.currency, settings.base, settings.fx), 0);
-  const charge = n * (+b.rate || 0);
+  const inv = bills.find((x) => x.kind === 'invoice' && x.booking_id === G);
+  const pays = txns.filter((t) => t.type === 'in' && t.booking_id === G);
+  const charge = resCharge(rows);
+  const total = inv ? conv(calc(inv, settings).total, inv.currency, settings.base, settings.fx) : charge;
+  const paid = inv ? conv(paidOf(inv, txns, settings.fx), inv.currency, settings.base, settings.fx) : resPaid(G, txns, settings.base, settings.fx);
   async function setStatus(k) {
-    if (k === 'cancel' && !(await confirm('Cancel this booking?', 'Cancel booking'))) return;
-    if (!(await run(supabase.from('bookings').update({ status: k }).eq('id', id), { in: 'Checked in', out: 'Checked out — room set to cleaning', cancel: 'Booking cancelled' }[k]))) return;
-    if (k === 'out' && r) await run(supabase.from('rooms').update({ status: 'cleaning' }).eq('id', r.id));
+    if (k === 'cancel' && !(await confirm('Cancel this reservation?', 'Cancel reservation'))) return;
+    const msg = { in: 'Checked in', out: 'Checked out — rooms set to cleaning', cancel: 'Reservation cancelled' }[k];
+    if (!(await run(supabase.from('bookings').update({ status: k }).eq('group_id', G), msg))) return;
+    if (k === 'out' && rr.length) await run(supabase.from('rooms').update({ status: 'cleaning' }).in('id', rr.map((r) => r.id)));
   }
   async function del() {
-    if (!(await confirm('Delete this booking for good?'))) return;
-    if (await run(supabase.from('bookings').delete().eq('id', id), 'Booking deleted')) close();
+    if (!(await confirm('Delete this reservation for good? Payments stay in Finance.'))) return;
+    if (await run(supabase.from('bookings').delete().eq('group_id', G), 'Reservation deleted')) close();
   }
-  const msg = `Hello ${b.guest}, your booking at ${settings.name} is confirmed: ${r ? 'Room ' + r.name : ''}, ${dL(b.check_in)} to ${dL(b.check_out)} (${n} night${n === 1 ? '' : 's'}). Contact: ${settings.phones}`;
+  const roomsTxt = rr.length ? rr.map((r) => r.name).join(', ') : `${b.rooms_wanted || 1} wanted — not assigned yet`;
+  const waMsg = b.status === 'request'
+    ? `Hello ${b.guest}, thank you for your booking request at ${settings.name} for ${dL(b.check_in)} to ${dL(b.check_out)}.`
+    : `Hello ${b.guest}, your reservation at ${settings.name} is confirmed: ${rr.length} room${rr.length === 1 ? '' : 's'} (${rr.map((r) => r.name).join(', ')}), ${dL(b.check_in)} to ${dL(b.check_out)} (${n} night${n === 1 ? '' : 's'}). Contact: ${settings.phones}`;
   return (
     <Sheet title={b.guest} onClose={close}>
-      <p><Chip s={s} /> <span className="muted">{b.source}</span></p>
+      <div className="flow">
+        {['request', 'booked', 'in', 'out'].map((k) => <span key={k} className={b.status === k ? 'on' : ''}>{BST[k][0]}</span>)}
+      </div>
+      {b.status === 'cancel' ? <p><Chip s={s} /></p> : null}
       <div className="tot" style={{ maxWidth: 'none' }}>
-        <div><span>Room</span><b>{r ? `${r.name}${r.type ? ' · ' + r.type : ''}` : '—'}</b></div>
+        <div><span>Rooms</span><b>{roomsTxt}</b></div>
         <div><span>Stay</span><b>{dL(b.check_in)} → {dL(b.check_out)}</b></div>
         <div><span>Nights · guests</span><b>{n} · {b.adults} adult{b.adults === 1 ? '' : 's'}{b.children ? `, ${b.children} child` : ''}</b></div>
-        <div><span>Room charge</span><b>{money(charge, settings.base)}</b></div>
-        <div><span>Paid so far</span><b className="in">{money(paid, settings.base)}</b></div>
+        <div><span>Accommodation</span><b>{(rr.length || b.rooms_wanted || 1)} × {n} × {money(b.rate, settings.base)} = {money(charge, settings.base)}</b></div>
+        {inv ? <div><span>Invoice {inv.no}</span><b>{money(total, settings.base)}</b></div> : null}
+        <div><span>Received (deposits & payments)</span><b className="in">{money(paid, settings.base)}</b></div>
+        <div className="grand"><span>Remaining balance</span><span>{money(Math.max(0, total - paid), settings.base)}</span></div>
         {b.phone ? <div><span>Phone</span><b>{b.phone}</b></div> : null}
+        {b.email ? <div><span>Email</span><b>{b.email}</b></div> : null}
         {b.country ? <div><span>Country</span><b>{b.country}</b></div> : null}
         {b.id_no ? <div><span>ID</span><b>{b.id_no}</b></div> : null}
+        <div><span>Booked via</span><b>{b.source}</b></div>
       </div>
       {b.notes ? <p className="muted" style={{ whiteSpace: 'pre-wrap' }}>{b.notes}</p> : null}
       <div className="actions">
+        {b.status === 'request' ? <button className="btn pri" onClick={() => open('bookingForm', { g: G, confirmMode: true })}>Confirm & assign rooms</button> : null}
         {b.status === 'booked' ? <button className="btn pri" onClick={() => setStatus('in')}>Check in</button> : null}
         {b.status === 'in' ? <button className="btn pri" onClick={() => setStatus('out')}>Check out</button> : null}
-        <button className="btn" onClick={() => open('payment', { link: { booking_id: id }, due: charge - paid, cur: settings.base, note: b.guest })}>Take payment</button>
-        <button className="btn" onClick={() => inv ? open('bill', { id: inv.id }) : open('billForm', { fromBooking: id, kind: 'invoice' })}>{inv ? 'Open invoice' : 'Create invoice'}</button>
-        <button className="btn" onClick={() => open('billForm', { fromBooking: id, kind: 'quote' })}>Quotation</button>
-        {b.phone ? <a className="btn" href={waLink(b.phone, msg)} target="_blank" rel="noopener">WhatsApp</a> : null}
-        <button className="btn" onClick={() => open('bookingForm', { id })}>Edit</button>
-        {b.status === 'booked' ? <button className="btn danger" onClick={() => setStatus('cancel')}>Cancel booking</button> : null}
-        {isAdmin ? <button className="btn danger" onClick={del}>Delete</button> : null}
+        <button className="btn" onClick={() => open('payment', { link: { booking_id: G }, due: total - paid, cur: settings.base, payer: b.guest, kind: paid ? 'Balance payment' : 'Deposit' })}>Record payment</button>
+        <button className="btn" onClick={() => (inv ? open('bill', { id: inv.id }) : open('billForm', { fromGroup: G, kind: 'invoice' }))}>{inv ? 'Open invoice' : 'Create invoice'}</button>
+        <button className="btn" onClick={() => open('billForm', { fromGroup: G, kind: 'quote' })}>Quotation</button>
+        {waNum(b.phone) ? <a className="btn" href={waLink(b.phone, waMsg)} target="_blank" rel="noopener">WhatsApp</a> : null}
+        <button className="btn" onClick={() => open('bookingForm', { g: G })}>Edit</button>
+        {['request', 'booked'].includes(b.status) ? <button className="btn danger" onClick={() => setStatus('cancel')}>Cancel</button> : null}
+        <button className="btn danger" onClick={del}>Delete</button>
       </div>
       {pays.length ? <>
-        <h3 style={{ fontSize: 15, margin: '16px 0 4px' }}>Payments</h3>
-        <div className="list">{pays.map((t) => <div key={t.id} className="item" style={{ cursor: 'default' }}><div className="grow">{dS(t.date)} · {t.method}</div><span className="amt in">{money(t.amount, t.currency)}</span></div>)}</div>
+        <h3 style={{ fontSize: 15, margin: '16px 0 4px' }}>Receipts</h3>
+        <div className="list">{pays.map((t) => <ReceiptItem key={t.id} t={t} />)}</div>
       </> : null}
     </Sheet>
   );
 }
 
-/* ---------- payments & money ---------- */
-function PaymentForm({ link, due, cur, note }) {
-  const { run, close, settings } = useStaff();
+/* ---------- payments, receipts & money ---------- */
+function PaymentForm({ link, due, cur, payer, kind }) {
+  const { reload, toast, replace, close, settings } = useStaff();
+  const [busy, setBusy] = useState(false);
   async function save(e) {
     e.preventDefault();
     const f = formData(e);
-    if (!(+f.amount > 0)) return;
-    if (await run(supabase.from('txns').insert({ type: 'in', ...f, amount: +f.amount, ...link }), 'Payment recorded')) close();
+    if (!(+f.amount > 0)) return toast('Enter an amount');
+    setBusy(true);
+    const { data, error } = await supabase.from('txns').insert({ type: 'in', ...f, amount: +f.amount, ...link }).select('id').single();
+    await reload();
+    setBusy(false);
+    if (error) return toast(friendly(error));
+    toast('Payment recorded');
+    replace('receipt', { id: data.id });
   }
   return (
     <Sheet title="Record payment" onClose={close}>
       <form onSubmit={save}>
+        {due > 0 ? <p className="muted">Remaining balance: <b>{money(due, cur || settings.base)}</b></p> : null}
         <div className="fg">
-          <label>Amount<input name="amount" type="number" step="0.01" min="0.01" required defaultValue={r2(Math.max(0, due || 0)) || ''} /></label>
+          <label>Amount received<input name="amount" type="number" step="0.01" min="0.01" required defaultValue={kind === 'Deposit' ? '' : r2(Math.max(0, due || 0)) || ''} /></label>
           <label>Currency<select name="currency" defaultValue={cur || settings.base}><Opts list={['MVR', 'USD']} /></select></label>
+          <label>Type<select name="pay_kind" defaultValue={kind || 'Deposit'}><Opts list={PAY_KINDS} /></select></label>
           <label>Method<select name="method"><Opts list={METH} /></select></label>
           <label>Date<input name="date" type="date" defaultValue={today()} /></label>
+          <label>Received from<input name="payer" defaultValue={payer || ''} /></label>
           <label>Category<select name="cat"><Opts list={CAT_IN} /></select></label>
-          <label>Note<input name="note" defaultValue={note || ''} /></label>
+          <label>Note<input name="note" placeholder="Bank ref, slip no…" /></label>
         </div>
-        <div className="actions"><button className="btn pri">Save payment</button></div>
+        <div className="actions"><button className="btn pri" disabled={busy}>{busy ? 'Saving…' : 'Save & make receipt'}</button></div>
       </form>
     </Sheet>
   );
 }
 
+function ReceiptSheet({ id }) {
+  const all = useStaff();
+  const { txns, settings, signature, run, close, confirm, toast } = all;
+  const t = txns.find((x) => x.id === id);
+  if (!t) return null;
+  const sum = receiptSummary(t, all);
+  const text = `${settings.name}\nReceipt ${t.receipt_no || ''} — ${dL(t.date)}\nReceived from: ${t.payer || ''}\n${t.pay_kind || 'Payment'}: ${money(t.amount, t.currency)} (${t.method})${sum ? `\n${sum.label.replace(/\n/g, ' ')}\nTotal: ${money(sum.total, sum.currency)}\nReceived to date: ${money(sum.received, sum.currency)}\nRemaining balance: ${money(Math.max(0, sum.total - sum.received), sum.currency)}` : ''}\n\nThank you. Tel: ${settings.phones}`;
+  const phone = all.bookings.find((b) => gid(b) === t.booking_id)?.phone || all.bills.find((b) => b.id === t.bill_id)?.phone;
+  async function del() { if ((await confirm('Delete this payment and its receipt?')) && (await run(supabase.from('txns').delete().eq('id', id), 'Deleted'))) close(); }
+  async function copy() { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Could not copy'); } }
+  return (
+    <Sheet title={`Receipt ${t.receipt_no || ''}`} onClose={close}>
+      <div className="paper"><ReceiptPaper txn={t} settings={settings} signature={signature} summary={sum} /></div>
+      <div className="actions">
+        <a className="btn pri" href={`/staff/billing/print?receipt=${t.id}`} target="_blank" rel="noopener">Print / PDF</a>
+        {waNum(phone) ? <a className="btn" href={waLink(phone, text)} target="_blank" rel="noopener">Send on WhatsApp</a> : null}
+        <button className="btn" onClick={copy}>Copy text</button>
+        <button className="btn danger" onClick={del}>Delete</button>
+      </div>
+    </Sheet>
+  );
+}
+
 function TxnForm({ id, type }) {
-  const { txns, run, close, confirm, settings } = useStaff();
+  const { txns, run, close, confirm, settings, open } = useStaff();
   const x = txns.find((t) => t.id === id) || { type };
   const isIn = x.type === 'in';
   async function save(e) {
@@ -296,34 +442,42 @@ function TxnForm({ id, type }) {
           <label>Category<select name="cat" defaultValue={x.cat}><Opts list={isIn ? CAT_IN : CAT_OUT} /></select></label>
           <label>Date<input name="date" type="date" defaultValue={x.date || today()} /></label>
           <label>Method<select name="method" defaultValue={x.method || 'Cash'}><Opts list={METH} /></select></label>
-          <label>Note<input name="note" defaultValue={x.note || ''} placeholder={isIn ? 'Guest, room…' : 'Shop, bill no…'} /></label>
+          <label>{isIn ? 'Received from' : 'Paid to'}<input name="payer" defaultValue={x.payer || ''} /></label>
+          <label className="full">Note<input name="note" defaultValue={x.note || ''} placeholder={isIn ? 'What it was for' : 'Shop, bill no…'} /></label>
         </div>
-        {x.bill_id || x.booking_id ? <p className="small muted">Linked to a booking or invoice.</p> : null}
+        {x.receipt_no ? <p className="small muted">Guest payment · receipt {x.receipt_no} · <button type="button" className="btn sm" onClick={() => open('receipt', { id })}>View receipt</button></p> : null}
         <div className="actions"><button className="btn pri">Save</button>{id ? <button type="button" className="btn danger" onClick={del}>Delete</button> : null}</div>
       </form>
     </Sheet>
   );
 }
 
-/* ---------- bills ---------- */
-function billFromBooking(b, r, kind, st) {
+/* ---------- quotations & invoices ---------- */
+function billFromGroup(rows, rooms, kind, st) {
+  const b = rows[0];
   const n = nights(b.check_in, b.check_out);
+  const byRate = {};
+  rows.filter((x) => x.status !== 'cancel').forEach((x) => { const k = String(+x.rate || 0); (byRate[k] = byRate[k] || []).push(x); });
+  const items = Object.entries(byRate).map(([rate, xs]) => {
+    const rr = resRooms(xs, rooms);
+    const label = rr.length ? ` – Room${rr.length > 1 ? 's' : ''} ${rr.map((r) => r.name).join(', ')}` : '';
+    return { d: `Accommodation${label}\n${dL(b.check_in)} – ${dL(b.check_out)}`, q: rr.length || +b.rooms_wanted || 1, n, p: +rate };
+  });
   return {
-    kind, customer: b.guest, phone: b.phone, caddr: '', booking_id: b.id, currency: st.base || 'MVR', date: today(),
-    due: kind === 'invoice' ? b.check_out : addD(today(), 7),
-    items: [{ d: `Accommodation${r ? ` – Room ${r.name}${r.type ? ` (${r.type})` : ''}` : ''}\n${dL(b.check_in)} – ${dL(b.check_out)}`, q: 1, n, p: +b.rate || 0 }],
-    discount: 0, svc_on: +st.service > 0, tgst_on: +st.tgst > 0, green_units: (+b.adults || 1) * n, notes: '',
+    kind, customer: b.guest, phone: b.phone, caddr: '', booking_id: gid(b), currency: st.base || 'MVR', date: today(),
+    due: kind === 'invoice' ? b.check_out : addD(today(), 7), items: items.length ? items : [{ d: 'Accommodation', q: 1, n, p: 0 }],
+    discount: 0, svc_on: false, tgst_on: false, green_units: 0, notes: '',
   };
 }
 
-function BillForm({ id, kind, fromBooking }) {
+function BillForm({ id, kind, fromGroup }) {
   const { bills, bookings, rooms, settings: st, run, close, replace, toast } = useStaff();
   const start = (() => {
     const ex = bills.find((x) => x.id === id);
     if (ex) return ex;
-    const bk = bookings.find((x) => x.id === fromBooking);
-    if (bk) return billFromBooking(bk, rooms.find((r) => r.id === bk.room_id), kind, st);
-    return { kind, currency: st.base || 'MVR', date: today(), due: addD(today(), kind === 'quote' ? 7 : 0), items: [{ d: kind ? 'Accommodation' : '', q: 1, n: 1, p: 0 }], discount: 0, svc_on: false, tgst_on: false, green_units: 0, notes: '', customer: '', caddr: '', phone: '' };
+    const rows = bookings.filter((x) => gid(x) === fromGroup);
+    if (rows.length) return billFromGroup(rows, rooms, kind, st);
+    return { kind, currency: st.base || 'MVR', date: today(), due: addD(today(), kind === 'quote' ? 7 : 0), items: [{ d: 'Accommodation', q: 1, n: 1, p: 0 }], discount: 0, svc_on: false, tgst_on: false, green_units: 0, notes: '', customer: '', caddr: '', phone: '' };
   })();
   const [b, setB] = useState(start);
   const isQ = b.kind === 'quote';
@@ -358,7 +512,7 @@ function BillForm({ id, kind, fromBooking }) {
         {isQ ? <label>Status<select value={b.status || 'draft'} onChange={(e) => set('status', e.target.value)}><Opts list={[['draft', 'Draft'], ['sent', 'Sent'], ['accepted', 'Accepted'], ['declined', 'Declined']]} /></select></label> : null}
       </div>
       <h3 style={{ fontSize: 15, margin: '16px 0 4px' }}>Items</h3>
-      <p className="small muted" style={{ margin: '0 0 8px' }}>For rooms fill Nights (3 rooms × 1 night × rate). Leave Nights empty for other items.</p>
+      <p className="small muted" style={{ margin: '0 0 8px' }}>Rooms: fill Rooms, Nights and Rate (5 rooms × 11 nights × 470). Extra charges: leave Nights empty.</p>
       <div className="items">
         <div className="it small muted"><span>Description</span><span>Qty / rooms</span><span>Nights</span><span>Rate</span><span /></div>
         {b.items.map((it, i) => (
@@ -372,9 +526,9 @@ function BillForm({ id, kind, fromBooking }) {
         ))}
       </div>
       <div className="row">
-        <button type="button" className="btn sm" onClick={() => addItem()}>+ Add line</button>
-        <button type="button" className="btn sm" onClick={() => addItem('Accommodation', 1)}>Accommodation</button>
-        {['Airport transfer', 'Meal plan', 'Excursion'].map((d) => <button type="button" key={d} className="btn sm" onClick={() => addItem(d)}>{d}</button>)}
+        <button type="button" className="btn sm" onClick={() => addItem()}>+ Extra charge</button>
+        <button type="button" className="btn sm" onClick={() => addItem('Accommodation', 1)}>+ Rooms</button>
+        {['Airport transfer', 'Meals', 'Excursion', 'Laundry'].map((d) => <button type="button" key={d} className="btn sm" onClick={() => addItem(d)}>{d}</button>)}
       </div>
       <div className="fg" style={{ marginTop: 14 }}>
         <label>Discount (amount)<input type="number" step="0.01" min="0" value={b.discount} onChange={(e) => set('discount', e.target.value)} /></label>
@@ -399,15 +553,16 @@ function BillForm({ id, kind, fromBooking }) {
 }
 
 function BillSheet({ id }) {
-  const { bills, txns, settings: st, signature, run, open, close, replace, confirm, isAdmin, toast } = useStaff();
+  const { bills, txns, settings: st, signature, run, open, close, replace, confirm, toast } = useStaff();
   const b = bills.find((x) => x.id === id);
   if (!b) return null;
   const isQ = b.kind === 'quote';
   const c = calc(b, st);
   const s = billState(b, txns, st);
   const paid = isQ ? 0 : paidOf(b, txns, st.fx);
+  const pays = isQ ? [] : txns.filter((t) => t.type === 'in' && (t.bill_id === b.id || (b.booking_id && t.booking_id === b.booking_id)));
   const text = `${st.name}\n${isQ ? 'Quotation' : 'Invoice'} ${b.no} — ${dL(b.date)}\n${b.customer}\n\n${(b.items || [])
-    .map((i) => `• ${String(i.d).replace(/\n/g, ' ')}: ${qtyLines(i, b.currency).join(' @ ')} = ${num(lineTot(i))}`).join('\n')}\n\nTotal: ${money(c.total, b.currency)}${!isQ && paid ? `\nPaid: ${money(paid, b.currency)}\nBalance: ${money(c.total - paid, b.currency)}` : ''}${st.bank ? `\n\n${st.bank}` : ''}\n\nTel: ${st.phones}`;
+    .map((i) => `• ${String(i.d).replace(/\n/g, ' ')}: ${qtyLines(i, b.currency).join(' @ ')} = ${num(lineTot(i))}`).join('\n')}\n\nTotal: ${money(c.total, b.currency)}${!isQ && paid ? `\nReceived: ${money(paid, b.currency)}\nRemaining balance: ${money(c.total - paid, b.currency)}` : ''}${st.bank ? `\n\n${st.bank}` : ''}\n\nTel: ${st.phones}`;
   async function convert() {
     const { id: _i, no, seq, yr, status, created_at, created_by, rates, ...rest } = b;
     const d = await run(supabase.from('bills').insert({ ...rest, kind: 'invoice', date: today(), due: today(), from_quote: b.no, status: 'issued' }).select('id').single(), 'Invoice created');
@@ -415,127 +570,28 @@ function BillSheet({ id }) {
     await run(supabase.from('bills').update({ status: 'converted' }).eq('id', id));
     replace('bill', { id: d.id });
   }
-  async function del() { if ((await confirm('Delete this bill? Linked payments stay in Money.')) && (await run(supabase.from('bills').delete().eq('id', id), 'Deleted'))) close(); }
+  async function del() { if ((await confirm('Delete this document? Payments stay in Finance.')) && (await run(supabase.from('bills').delete().eq('id', id), 'Deleted'))) close(); }
   async function copy() { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Could not copy'); } }
   return (
     <Sheet title={`${isQ ? 'Quotation' : 'Invoice'} ${b.no}`} onClose={close}>
-      <p><Chip s={s} />{b.from_quote ? <span className="muted small"> from {b.from_quote}</span> : null}</p>
+      <p><Chip s={s} />{b.from_quote ? <span className="muted small"> from {b.from_quote}</span> : null}
+        {!isQ ? <span className="muted small"> · balance {money(Math.max(0, c.total - paid), b.currency)}</span> : null}</p>
       <div className="paper"><BillPaper bill={b} settings={st} signature={signature} txns={txns} /></div>
       <div className="actions">
-        {!isQ && s[0] !== 'Paid' ? <button className="btn pri" onClick={() => open('payment', { link: { bill_id: b.id }, due: c.total - paid, cur: b.currency, note: `${b.no} ${b.customer}` })}>Record payment</button> : null}
+        {!isQ && s[0] !== 'Paid' ? <button className="btn pri" onClick={() => open('payment', { link: b.booking_id ? { booking_id: b.booking_id } : { bill_id: b.id }, due: c.total - paid, cur: b.currency, payer: b.customer, kind: paid ? 'Balance payment' : 'Deposit' })}>Record payment</button> : null}
         {isQ && b.status !== 'converted' ? <button className="btn pri" onClick={convert}>Turn into invoice</button> : null}
-        <a className="btn" href={`/staff/bills/print?id=${b.id}`} target="_blank" rel="noopener">Print / PDF</a>
-        <button className="btn" onClick={copy}>Copy text</button>
+        <a className="btn" href={`/staff/billing/print?id=${b.id}`} target="_blank" rel="noopener">Print / PDF</a>
         {waNum(b.phone) ? <a className="btn" href={waLink(b.phone, text)} target="_blank" rel="noopener">Send on WhatsApp</a> : null}
+        <button className="btn" onClick={copy}>Copy text</button>
         <button className="btn" onClick={() => open('billForm', { id: b.id })}>Edit</button>
-        {isAdmin ? <button className="btn danger" onClick={del}>Delete</button> : null}
+        <button className="btn danger" onClick={del}>Delete</button>
       </div>
-    </Sheet>
-  );
-}
-
-/* ---------- website requests ---------- */
-function RequestSheet({ id }) {
-  const { requests, rooms, bookings, settings, run, open, close } = useStaff();
-  const q = requests.find((x) => x.id === id);
-  if (!q) return null;
-  const r = rooms.find((x) => x.id === q.room_id);
-  const n = nights(q.check_in, q.check_out);
-  const free = rooms.filter((rm) => !bookings.some((b) => b.room_id === rm.id && ['booked', 'in'].includes(b.status) && q.check_in < b.check_out && b.check_in < q.check_out));
-  const pick = r && free.some((x) => x.id === r.id) ? r : free[0];
-  const reply = `Hello ${q.guest}, thank you for your booking request at ${settings.name} for ${dL(q.check_in)} to ${dL(q.check_out)}.`;
-  return (
-    <Sheet title={`Request · ${q.guest}`} onClose={close}>
-      <p><span className={`chip ${q.status === 'new' ? 's-arr' : q.status === 'accepted' ? 's-ready' : 's-maint'}`}>{q.status === 'new' ? 'New' : q.status === 'accepted' ? 'Accepted' : 'Declined'}</span> <span className="muted small">sent {new Date(q.created_at).toLocaleString('en-GB')}</span></p>
-      <div className="tot" style={{ maxWidth: 'none' }}>
-        <div><span>Stay</span><b>{dL(q.check_in)} → {dL(q.check_out)} ({n}n)</b></div>
-        <div><span>Room asked</span><b>{r ? `${r.name} ${r.type || ''}` : 'Any room'}</b></div>
-        <div><span>Guests</span><b>{q.adults} adult{q.adults === 1 ? '' : 's'}{q.children ? `, ${q.children} child` : ''}</b></div>
-        <div><span>Phone</span><b>{q.phone}</b></div>
-        {q.email ? <div><span>Email</span><b>{q.email}</b></div> : null}
-        {q.country ? <div><span>Country</span><b>{q.country}</b></div> : null}
-        <div><span>Free rooms now</span><b>{free.length ? free.map((x) => x.name).join(', ') : 'None'}</b></div>
-      </div>
-      {q.message ? <p style={{ whiteSpace: 'pre-wrap' }}>“{q.message}”</p> : null}
-      <div className="actions">
-        {q.status === 'new' ? <>
-          <button className="btn pri" onClick={() => open('bookingForm', { requestId: q.id, pre: { guest: q.guest, phone: q.phone, email: q.email, country: q.country, check_in: q.check_in, check_out: q.check_out, adults: q.adults, children: q.children, notes: q.message, room_id: pick?.id, rate: pick?.rate } })}>Accept → make booking</button>
-          <button className="btn danger" onClick={async () => { if (await run(supabase.from('booking_requests').update({ status: 'declined' }).eq('id', id), 'Declined')) close(); }}>Decline</button>
-        </> : q.booking_id ? <button className="btn" onClick={() => open('booking', { id: q.booking_id })}>Open booking</button> : null}
-        <a className="btn" href={waLink(q.phone, reply)} target="_blank" rel="noopener">WhatsApp guest</a>
-      </div>
-    </Sheet>
-  );
-}
-
-/* ---------- staff form ---------- */
-function StaffForm({ id, delete: isDel }) {
-  const { staff, run, close, confirm, toast } = useStaff();
-  const s = staff.find((x) => x.id === id) || {};
-  const [photo, setPhoto] = useState(s.photo || '');
-  const [busy, setBusy] = useState(false);
-  
-  async function upload(e) {
-    const f = e.target.files[0]; if (!f) return;
-    setBusy(true);
-    const blob = await resizeImage(f, 800);
-    const path = `staff/${Date.now()}.jpg`;
-    const { error } = await supabase.storage.from('media').upload(path, blob, { contentType: 'image/jpeg' });
-    setBusy(false);
-    if (error) return toast(error.message);
-    setPhoto(supabase.storage.from('media').getPublicUrl(path).data.publicUrl);
-  }
-  
-  async function save(e) {
-    e.preventDefault();
-    const f = formData(e);
-    const row = { name: f.name.trim(), role: f.role.trim(), bio: f.bio, sort: +f.sort || 0, is_public: !!f.is_public, photo };
-    const q = id ? supabase.from('staff').update(row).eq('id', id) : supabase.from('staff').insert(row);
-    if (await run(q, 'Staff member saved')) close();
-  }
-  
-  async function del() {
-    if (!(await confirm('Delete this staff member from the directory?'))) return;
-    if (await run(supabase.from('staff').delete().eq('id', id), 'Staff member deleted')) close();
-  }
-  
-  if (isDel) {
-    return (
-      <Sheet title="Delete staff member?" onClose={close}>
-        <p>Remove <b>{s.name}</b> from the staff directory?</p>
-        <div className="actions">
-          <button className="btn danger" onClick={del}>Delete</button>
-          <button className="btn" onClick={close}>Keep</button>
-        </div>
-      </Sheet>
-    );
-  }
-  
-  return (
-    <Sheet title={id ? `Edit ${s.name}` : 'Add staff member'} onClose={close}>
-      <form onSubmit={save}>
-        <div className="fg">
-          <label>Name<input name="name" required defaultValue={s.name || ''} placeholder="Ahmed Hassan" /></label>
-          <label>Role<input name="role" required defaultValue={s.role || ''} placeholder="Manager" /></label>
-          <label>Order on website<input name="sort" type="number" defaultValue={s.sort || 0} /></label>
-          <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="is_public" defaultChecked={s.is_public ?? true} />Show on website</label>
-          <label className="full">Bio<textarea name="bio" defaultValue={s.bio || ''} placeholder="A brief introduction or background..." /></label>
-        </div>
-        <div className="row" style={{ marginTop: 12 }}>
-          {photo ? <img src={photo} alt="" style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 10 }} /> : null}
-          <label className="btn sm" style={{ color: 'var(--ink)' }}>{busy ? 'Uploading…' : photo ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" hidden onChange={upload} /></label>
-          {photo ? <button type="button" className="btn sm danger" onClick={() => setPhoto('')}>Remove photo</button> : null}
-        </div>
-        <div className="actions">
-          <button className="btn pri" disabled={busy}>Save staff member</button>
-          {id ? <button type="button" className="btn danger" onClick={del}>Delete</button> : null}
-        </div>
-      </form>
+      {pays.length ? <><h3 style={{ fontSize: 15, margin: '16px 0 4px' }}>Receipts</h3><div className="list">{pays.map((t) => <ReceiptItem key={t.id} t={t} />)}</div></> : null}
     </Sheet>
   );
 }
 
 export const SHEETS = {
   confirm: Confirm, room: RoomSheet, roomForm: RoomForm, booking: BookingSheet, bookingForm: BookingForm,
-  payment: PaymentForm, txnForm: TxnForm, billForm: BillForm, bill: BillSheet, request: RequestSheet, staffForm: StaffForm,
+  payment: PaymentForm, receipt: ReceiptSheet, txnForm: TxnForm, billForm: BillForm, bill: BillSheet,
 };

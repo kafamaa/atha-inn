@@ -9,7 +9,7 @@ const adminClient = () =>
   });
 const json = (body, status = 200) => Response.json(body, { status });
 
-// Only an owner/manager (role = admin) may manage staff accounts.
+// Any admin account may manage admin accounts.
 async function requireAdmin(req) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { error: json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not set on the server' }, 500) };
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -17,19 +17,19 @@ async function requireAdmin(req) {
   const sb = adminClient();
   const { data: { user } = {}, error } = await sb.auth.getUser(token);
   if (error || !user) return { error: json({ error: 'Not signed in' }, 401) };
-  const { data: p } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle();
-  if (p?.role !== 'admin') return { error: json({ error: 'Only the owner can manage staff' }, 403) };
+  const { data: p } = await sb.from('profiles').select('id').eq('id', user.id).maybeSingle();
+  if (!p) return { error: json({ error: 'Only admins can manage accounts' }, 403) };
   return { sb, user };
 }
 
 export async function POST(req) {
   const a = await requireAdmin(req);
   if (a.error) return a.error;
-  const { email, password, name, role } = await req.json().catch(() => ({}));
+  const { email, password, name } = await req.json().catch(() => ({}));
   if (!email || !password || String(password).length < 8) return json({ error: 'Email and a password of at least 8 characters are needed' }, 400);
   const { data, error } = await a.sb.auth.admin.createUser({ email: String(email).trim(), password, email_confirm: true, user_metadata: { name } });
   if (error) return json({ error: error.message }, 400);
-  const { error: e2 } = await a.sb.from('profiles').upsert({ id: data.user.id, name: name || email, email, role: role === 'admin' ? 'admin' : 'staff' });
+  const { error: e2 } = await a.sb.from('profiles').upsert({ id: data.user.id, name: name || email, email, role: 'admin' });
   if (e2) return json({ error: e2.message }, 400);
   return json({ ok: true });
 }

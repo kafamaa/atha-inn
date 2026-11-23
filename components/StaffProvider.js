@@ -7,7 +7,7 @@ import { StaffCtx } from '@/lib/staffContext';
 import { addD, friendly, today } from '@/lib/util';
 import { SHEETS } from '@/components/Sheets';
 
-const EMPTY = { rooms: [], bookings: [], requests: [], bills: [], txns: [], settings: {}, signature: '', staff: [] };
+const EMPTY = { rooms: [], bookings: [], gallery: [], bills: [], txns: [], settings: {}, signature: '', staff: [] };
 
 export default function StaffProvider({ children }) {
   const router = useRouter();
@@ -45,19 +45,18 @@ export default function StaffProvider({ children }) {
     const q = await Promise.all([
       supabase.from('rooms').select('*').order('sort').order('name'),
       supabase.from('bookings').select('*').gte('check_out', since).order('check_in'),
-      supabase.from('booking_requests').select('*').order('created_at', { ascending: false }).limit(300),
+      supabase.from('gallery').select('*').order('sort').order('created_at', { ascending: false }),
       supabase.from('bills').select('*').order('created_at', { ascending: false }).limit(2000),
       supabase.from('txns').select('*').gte('date', addD(today(), -800)).order('date', { ascending: false }).limit(5000),
       supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
       supabase.from('secrets').select('*').eq('id', 1).maybeSingle(),
       supabase.from('profiles').select('*').order('created_at'),
-      supabase.from('staff').select('*').order('sort').order('name'),
     ]);
     const bad = q.find((x) => x.error);
     if (bad) toast(friendly(bad.error));
     setData({
-      rooms: q[0].data || [], bookings: q[1].data || [], requests: q[2].data || [], bills: q[3].data || [],
-      txns: q[4].data || [], settings: q[5].data || {}, signature: q[6].data?.signature || '', staff: q[8].data || [],
+      rooms: q[0].data || [], bookings: q[1].data || [], gallery: q[2].data || [], bills: q[3].data || [],
+      txns: q[4].data || [], settings: q[5].data || {}, signature: q[6].data?.signature || '', staff: q[7].data || [],
     });
     setLoaded(true);
   }, [toast]);
@@ -87,22 +86,23 @@ export default function StaffProvider({ children }) {
     return (
       <main className="book-wrap"><div className="card">
         <h1 style={{ fontSize: 22 }}>No staff access</h1>
-        <p>This account ({session.user.email}) is not set up as staff. Ask the owner to add you in Settings → Staff.</p>
+        <p>This account ({session.user.email}) is not set up as staff. Ask an admin to add you in Settings → Admin accounts.</p>
         <button className="btn" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </div></main>
     );
   }
 
-  const isAdmin = profile.role === 'admin';
-  const newReq = data.requests.filter((r) => r.status === 'new').length;
+  const isAdmin = true; // every admin account has full access
+  const newReq = data.bookings.filter((b) => b.status === 'request').length;
   const value = { ...data, loaded, profile, isAdmin, reload, run, toast, open, close, replace, closeAll, confirm, session };
   const tabs = [
-    ['/staff', 'Today'], ['/staff/bookings', 'Bookings'], ['/staff/requests', 'Requests', newReq],
-    ['/staff/rooms', 'Rooms'], ['/staff/team', 'Staff'], ['/staff/bills', 'Bills'],
-    ...(isAdmin ? [['/staff/money', 'Money'], ['/staff/settings', 'Settings']] : []),
+    ['/staff', 'Dashboard', 'Home'], ['/staff/reservations', 'Reservations', 'Bookings', newReq],
+    ['/staff/billing', 'Billing & Payments', 'Billing'], ['/staff/website', 'Website & Gallery', 'Website'],
+    ['/staff/finance', 'Finance & Reports', 'Finance'], ['/staff/settings', 'Settings', 'Settings'],
   ];
-  const nav = tabs.map(([h, l, n]) => (
-    <Link key={h} href={h} className={path === h ? 'on' : ''}>{l}{n ? <span className="badge">{n}</span> : null}</Link>
+  const on = (h) => (h === '/staff' ? path === h : path.startsWith(h));
+  const nav = (short) => tabs.map(([h, l, sl, n]) => (
+    <Link key={h} href={h} className={on(h) ? 'on' : ''}>{short ? sl : l}{n ? <span className="badge">{n}</span> : null}</Link>
   ));
   const top = stack[stack.length - 1];
   const Cmp = top ? SHEETS[top.type] : null;
@@ -113,16 +113,15 @@ export default function StaffProvider({ children }) {
         <div className="top-in">
           <Link href="/staff" className="brand">
             <img src={data.settings.logo_url || '/logo.png'} alt="" />
-            <span><b>{data.settings.name || 'Atha Inn'}</b><small>{profile.name || profile.email} · {isAdmin ? 'Owner' : 'Front desk'}</small></span>
+            <span><b>{data.settings.name || 'Atha Inn'}</b><small>{profile.name || profile.email} · Admin</small></span>
           </Link>
           <Link href="/" className="icon-btn" target="_blank">Website</Link>
-          {isAdmin ? <Link href="/staff/settings" className="icon-btn" aria-label="Settings">⚙</Link> : null}
           <button className="icon-btn" onClick={() => supabase.auth.signOut()}>Log out</button>
         </div>
-        <nav className="tabs">{nav}</nav>
+        <nav className="tabs">{nav(false)}</nav>
       </header>
       <main className="staff-main">{loaded ? children : <div className="empty">Loading…</div>}</main>
-      <nav className="nav-bottom">{nav.slice(0, isAdmin ? 7 : 6)}</nav>
+      <nav className="nav-bottom">{nav(true)}</nav>
       {Cmp ? <Cmp key={top.key} {...top.props} /> : null}
       {msg ? <div className="toast" role="status">{msg}</div> : null}
     </StaffCtx.Provider>

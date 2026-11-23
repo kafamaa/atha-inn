@@ -1,10 +1,14 @@
-# Atha Inn: website + staff system
+# Atha Inn: website + admin system
 
-- **Public website** (`/`): rooms, prices, photos, contact, WhatsApp, and online booking requests (`/book`) that check which rooms are free.
-- **Staff system** (`/staff`, log in at `/login`):
-  - **Front desk:** today's board, bookings and calendar, website requests, check-in/out, rooms, quotations and invoices, guest payments.
-  - **Owner / manager:** everything, plus income and expenses, settings and staff accounts.
-- **Backend:** Supabase (Postgres + login). Security rules in the database decide what each person can see, so front-desk staff can never read your money figures, even with technical tricks.
+- **Public website** (`/`): logo and welcome, rooms with photos, prices and facilities, guesthouse and kitchen information, photo and video gallery, WhatsApp, contact and location, and a booking request form (`/book`) that shows free rooms.
+- **Admin system** (`/staff`, log in at `/login`). Every admin account (owner, reception, staff) has the same access. Six menu items:
+  1. **Dashboard:** rooms tonight, new requests, arrivals and departures, unpaid invoices, this month's balance.
+  2. **Reservations:** website requests, manual bookings for one or many rooms, calendar, room availability. Workflow: New request → Confirmed → Checked in → Checked out. Double bookings are blocked by the database.
+  3. **Billing & Payments:** quotations, invoices and payment receipts with automatic numbers. Rooms × nights × price, extra charges, discounts, taxes, deposits, remaining balance, Paid / Partially paid / Unpaid, print or save as PDF, and WhatsApp.
+  4. **Website & Gallery:** upload or remove photos and videos, publish or hide them, change the homepage cover, and edit rooms, prices, facilities and texts.
+  5. **Finance & Reports:** income and expenses by category (guest payments are included automatically), daily and monthly summaries, occupancy, unpaid balances, and CSV and PDF reports.
+  6. **Settings:** tax, document numbers, payment details, signature, admin accounts.
+- **Backend:** Supabase (Postgres, logins and file storage). Guests who aren't logged in can only see the public website.
 
 Everything is free on Supabase's and Vercel's free plans.
 
@@ -14,7 +18,7 @@ Everything is free on Supabase's and Vercel's free plans.
 
 1. Go to **supabase.com**, then **New project**. Name it `atha-inn` and choose the **Singapore** region (closest to the Maldives). Save the database password somewhere safe.
 2. Open **SQL Editor**, then **New query**. Paste everything from `supabase/schema.sql` and press **Run**. You should see "Success".
-3. **Authentication → Sign In / Providers → Email:** turn **off** "Allow new users to sign up" (only you create staff accounts). Keep Email login on.
+3. **Authentication → Sign In / Providers → Email:** turn **off** "Allow new users to sign up" (only admins create accounts). Keep Email login on.
 4. **Authentication → Users → Add user → Create new user.** Enter *your* email and a strong password, and tick "Auto confirm". **The first account becomes the owner.**
 5. **Project Settings → API.** Copy three values:
    - Project URL
@@ -41,15 +45,21 @@ Create a new **private** repository (e.g. `kafamaa/atha-inn`) and upload all fil
 ## 4. First login
 
 1. Open `your-site/login` and sign in with the owner account from step 1.4.
-2. **Rooms:** use Quick setup, then tap each room to set its name, price, description and photo.
-3. **Settings (⚙):** check business details, tax rates, invoice numbers (next invoice is `AT/2026/03`), payment details and pictures.
-4. **Settings → Staff accounts:** add each staff member with their email and a password, then give them those details. Choose **Front desk** or **Owner / manager**.
+2. **Website & Gallery → Rooms:** use Quick setup, then edit each room's price, facilities, description and photo. Upload photos and videos under **Gallery**.
+3. **Settings:** check tax rates, document numbers (next invoice `AT/2026/03`, receipts start at `RC/2026/001`) and payment details.
+4. **Settings → Admin accounts:** add reception and staff with their email and a password, then give them those details.
 
-## How bookings from the website work
+## Updating from the earlier version
 
-A guest picks dates and sees only free rooms, then sends a request. It shows up under **Requests**, with a badge on the menu. Tap it and choose **Accept → make booking**, then WhatsApp the guest to confirm. The database itself blocks double-booking a room, even if two staff save at the same moment.
+If you already ran the old `schema.sql`, simply run the new one again in the SQL Editor. It upgrades the database in place and moves any old website requests into Reservations. Then replace all the code files in GitHub; Vercel redeploys by itself.
 
-## Bills
+## How reservations work
+
+A guest picks dates and a number of rooms on the website and sends a request. It appears under **Reservations → Requests**, with a badge on the menu. Open it and tap **Confirm & assign rooms**: free rooms are suggested, and you tick the ones to give. After that, use **Check in** and **Check out**. Checking out marks the rooms "Needs cleaning". One reservation can hold several rooms, for example 5 rooms × 11 nights.
+
+## Bills, payments and receipts
+
+- **Record payment** on a reservation or invoice, and choose **Deposit**, **Part payment**, **Full payment** or **Balance payment**. A numbered receipt (`RC/2026/001`) is made automatically and shows the remaining balance.
 
 - Numbers are given automatically by the database (`AT/2026/03`, `QT/2026/01`…). You can change the prefixes and next numbers in Settings.
 - For rooms, fill in **Nights**: "3 rooms × 1 night × MVR 450". Leave Nights empty for other items.
@@ -71,10 +81,12 @@ npm run dev                  # http://localhost:3000
 supabase/schema.sql     database tables, security rules, booking + numbering logic
 app/page.js             public home page
 app/book/page.js        public booking request form
-app/login/page.js       staff login
-app/staff/…             staff pages (today, bookings, requests, rooms, bills, money, settings)
-app/api/staff/route.js  creates / removes staff logins (server only, uses service_role key)
+app/login/page.js       admin login
+app/staff/…             admin pages (dashboard, reservations, billing, website, finance, settings)
+app/api/staff/route.js  creates / removes admin logins (server only, uses service_role key)
 components/Sheets.js    booking, bill, payment, room forms
-components/BillPaper.js invoice / quotation layout
+components/BillPaper.js invoice / quotation / receipt layout
+components/Gallery.js   public gallery with photo/video viewer
+lib/report.js           daily & monthly finance figures
 lib/util.js             dates, money, tax calculations
 ```

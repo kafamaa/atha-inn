@@ -11,7 +11,8 @@ function BookForm() {
   const [ci, setCi] = useState(addD(today(), 1));
   const [co, setCo] = useState(addD(today(), 3));
   const [rooms, setRooms] = useState(null);
-  const [roomId, setRoomId] = useState(params.get('room') || '');
+  const [picks, setPicks] = useState(params.get('room') ? [params.get('room')] : []);
+  const [count, setCount] = useState(1);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
@@ -35,7 +36,10 @@ function BookForm() {
   const cur = info.base || 'MVR';
   const name = info.name || 'Atha Inn';
   const wa = info.whatsapp || '9607587079';
-  const chosen = rooms?.find((r) => r.id === roomId);
+  const chosen = (rooms || []).filter((r) => picks.includes(r.id));
+  const nRooms = chosen.length || count;
+  const est = chosen.length ? chosen.reduce((a, r) => a + r.rate * n, 0) : 0;
+  const toggle = (id) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   async function submit(e) {
     e.preventDefault();
@@ -43,11 +47,13 @@ function BookForm() {
     const f = Object.fromEntries(new FormData(e.currentTarget));
     if (rooms && rooms.length === 0) return setErr('No rooms are free for these dates. Please try other dates or WhatsApp us.');
     setBusy(true);
-    const p = { ...f, check_in: ci, check_out: co, room_id: chosen ? roomId : '' };
+    if (rooms && nRooms > rooms.length) return setErr(`Only ${rooms.length} room${rooms.length === 1 ? ' is' : 's are'} free for these dates.`);
+    const pref = chosen.length ? `Preferred rooms: ${chosen.map((r) => r.name).join(', ')}\n` : '';
+    const p = { ...f, message: pref + (f.message || ''), rooms: nRooms, check_in: ci, check_out: co };
     const { error } = await supabase.rpc('request_booking', { p });
     setBusy(false);
     if (error) return setErr(error.message || 'Something went wrong. Please WhatsApp us.');
-    setDone({ ...p, roomName: chosen ? `${chosen.type || 'Room'} ${chosen.name}` : 'Any room' });
+    setDone({ ...p, roomName: chosen.length ? `Room ${chosen.map((r) => r.name).join(', ')}` : `${nRooms} room${nRooms > 1 ? 's' : ''}` });
   }
 
   if (done) {
@@ -68,7 +74,7 @@ function BookForm() {
   return (
     <form className="card" onSubmit={submit}>
       <h1 style={{ fontSize: 28, marginBottom: 6 }}>Request a booking</h1>
-      <p className="muted" style={{ marginTop: 0 }}>Choose your dates, then pick a room. We confirm every request personally.</p>
+      <p className="muted" style={{ marginTop: 0 }}>Choose your dates and how many rooms you need. We confirm every request personally.</p>
       <div className="fg">
         <label>Check-in<input type="date" required min={today()} value={ci} onChange={(e) => { setCi(e.target.value); if (co <= e.target.value) setCo(addD(e.target.value, 1)); }} /></label>
         <label>Check-out<input type="date" required min={addD(ci || today(), 1)} value={co} onChange={(e) => setCo(e.target.value)} /></label>
@@ -80,19 +86,20 @@ function BookForm() {
       {rooms === null ? <p className="muted">Checking…</p> : rooms.length === 0 ? (
         <p className="out">No rooms free for these dates. Try other dates or WhatsApp us.</p>
       ) : (
-        <div className="pick">
-          <label className={`opt ${roomId === '' || !chosen ? 'on' : ''}`}>
-            <input type="radio" name="pickroom" checked={!chosen} onChange={() => setRoomId('')} />
-            <span>Any free room — we'll choose the best one for you</span>
-          </label>
-          {rooms.map((r) => (
-            <label key={r.id} className={`opt ${roomId === r.id ? 'on' : ''}`}>
-              <input type="radio" name="pickroom" checked={roomId === r.id} onChange={() => setRoomId(r.id)} />
-              <span style={{ flex: 1 }}><b>{r.type || 'Room'} {r.name}</b><br /><span className="small muted">Up to {r.max_guests} guests</span></span>
-              <span className="amt">{cur} {num(r.rate)}<br /><span className="small muted">{n > 0 ? `${cur} ${num(r.rate * n)} total` : '/ night'}</span></span>
-            </label>
-          ))}
-        </div>
+        <>
+          <p className="small muted" style={{ marginTop: 0 }}>{rooms.length} room{rooms.length === 1 ? ' is' : 's are'} free. Tick the rooms you'd like, or just tell us how many you need.</p>
+          {!chosen.length ? <label style={{ maxWidth: 220, marginBottom: 10 }}>Number of rooms<input type="number" min="1" max={rooms.length} value={count} onChange={(e) => setCount(Math.max(1, +e.target.value || 1))} /></label> : null}
+          <div className="pick">
+            {rooms.map((r) => (
+              <label key={r.id} className={`opt ${picks.includes(r.id) ? 'on' : ''}`}>
+                <input type="checkbox" checked={picks.includes(r.id)} onChange={() => toggle(r.id)} />
+                <span style={{ flex: 1 }}><b>{r.type || 'Room'} {r.name}</b><br /><span className="small muted">Up to {r.max_guests} guests</span></span>
+                <span className="amt">{cur} {num(r.rate)}<br /><span className="small muted">/ night</span></span>
+              </label>
+            ))}
+          </div>
+          {est ? <div className="calcbox">{chosen.length} room{chosen.length > 1 ? 's' : ''} × {n} night{n === 1 ? '' : 's'} ≈ <b>{cur} {num(est)}</b> <span className="small muted">before any taxes</span></div> : null}
+        </>
       )}
 
       <h2 style={{ fontSize: 18, margin: '20px 0 10px' }}>Your details</h2>
