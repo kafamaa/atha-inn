@@ -45,6 +45,7 @@ create table if not exists public.settings (
   updated_at timestamptz default now()
 );
 alter table public.settings
+  add column if not exists island_guide jsonb,
   add column if not exists tagline text default 'A calm island guesthouse in Kanditheemu',
   add column if not exists welcome text default 'Welcome to Atha Inn, a small family-run guesthouse on the island of Kanditheemu, Shaviyani Atoll.',
   add column if not exists about text default 'Clean, comfortable rooms with friendly local hosts.',
@@ -280,7 +281,7 @@ end $$;
 -- ---------- what the public website may read ----------
 drop view if exists public.public_info;
 create view public.public_info as
-  select name, tagline, welcome, about, kitchen_info, house_info, address, phones, whatsapp, email, map_url, logo_url, hero_url, base
+  select name, tagline, welcome, about, kitchen_info, house_info, address, phones, whatsapp, email, map_url, logo_url, hero_url, base, island_guide
   from public.settings where id = 1;
 drop view if exists public.public_rooms;
 create view public.public_rooms as
