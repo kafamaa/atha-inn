@@ -39,6 +39,72 @@ function LagoonArt() {
   );
 }
 
+
+const ISLAND_GUIDE = [
+  { type: 'sights', name: 'Nikamathi', description: 'A peaceful tree deck for relaxing and enjoying the island view.' },
+  { type: 'sights', name: 'Bumbaru Deck', description: 'A raised walkway and tree-canopy viewpoint for scenic photos.' },
+  { type: 'sights', name: 'Thela Park', description: 'A nature park for a quiet walk and a look at the mangroves.' },
+  { type: 'sights', name: 'Kandisaaru', description: 'Explore Kanditheemu\'s cultural heritage centre.' },
+  { type: 'sights', name: 'Ameenee Maalam', description: 'Beachfront swings and seating for a relaxed evening.' },
+  { type: 'sights', name: 'Beach walks', description: 'Enjoy Kanditheemu\'s shore and local island atmosphere. Follow local swimming guidance.' },
+  { type: 'food', name: 'La Olla Bistro', description: 'Local restaurant and café.', phone: '9893949' },
+  { type: 'food', name: 'OFI Cafe', description: 'Island café for meals and refreshments.', phone: '7709182' },
+  { type: 'food', name: 'Coffee Table', description: 'Local café and restaurant.', phone: '9859440' },
+  { type: 'food', name: 'Sol View', description: 'Local café.', phone: '9340929' },
+  { type: 'rides', name: 'Roseland Buggy', description: 'Local buggy ride service.', phone: '9850587' },
+  { type: 'rides', name: 'Klay Taxi', description: 'Local taxi contact.', phone: '7909007' },
+  { type: 'rides', name: 'Buggy Service', description: 'Arrange an island buggy ride.', phone: '9103359' },
+  { type: 'rides', name: 'Dhonabe Buggy', description: 'Local buggy service.', phone: '9648270' },
+  { type: 'rides', name: 'Avaaz Buggy Rides', description: 'Island transport contact.', phone: '9799785' },
+  { type: 'essentials', name: 'Line Watersports', description: 'Ask about canoeing and stand-up paddleboarding.', phone: '9657128' },
+  { type: 'essentials', name: 'Line Breeze', description: 'Homemade food contact.', phone: '9657128' },
+  { type: 'essentials', name: 'Little Bites', description: 'Homemade food and snacks.', phone: '9822700' },
+  { type: 'essentials', name: 'Fine Point', description: 'Local shop and supplies.', phone: '9419406' },
+  { type: 'essentials', name: 'Flying Fish', description: 'Ask about inter-island sea transport and schedules.', phone: '7910799' },
+];
+
+const GUIDE_GROUPS = [
+  { id: 'sights', title: 'Things to see & do', intro: 'Nature, viewpoints, heritage and island experiences.' },
+  { id: 'food', title: 'Restaurants & cafés', intro: 'Local places to eat and relax.' },
+  { id: 'rides', title: 'Buggy & taxi', intro: 'Contact a local driver to arrange an island ride.' },
+  { id: 'essentials', title: 'Food, rentals & useful services', intro: 'Helpful contacts for your stay.' },
+];
+
+function IslandGuide({ items }) {
+  const entries = Array.isArray(items) ? items.filter((x) => x && x.name && x.type && x.published !== false) : ISLAND_GUIDE;
+  return (
+    <div className="band-sand" id="discover">
+      <section className="section">
+        <div className="discover-heading">
+          <div><p className="discover-eyebrow">Your island guide</p><h2>Explore Kanditheemu</h2>
+            <p className="muted">Discover beautiful places, local food and transport around Sh. Kanditheemu.</p>
+          </div>
+          <a className="btn" href="https://guide.visitkanditheemu.com/" target="_blank" rel="noopener noreferrer">More island information ↗</a>
+        </div>
+        <div className="discover-jumps">
+          {GUIDE_GROUPS.map((g) => <a key={g.id} href={`#discover-${g.id}`}>{g.title}</a>)}
+        </div>
+        {GUIDE_GROUPS.map((g) => {
+          const list = entries.filter((x) => x.type === g.id);
+          return list.length ? (
+            <div key={g.id} id={`discover-${g.id}`} className="discover-group">
+              <h3>{g.title}</h3><p className="muted">{g.intro}</p>
+              <div className="discover-grid">
+                {list.map((x, index) => <article key={`${g.id}-${index}`} className="discover-card">
+                  <div className="discover-icon" aria-hidden="true">{g.id === 'sights' ? '🌴' : g.id === 'food' ? '🍽️' : g.id === 'rides' ? '🛺' : '🧭'}</div>
+                  <div><h4>{x.name}</h4>{x.description ? <p>{x.description}</p> : null}</div>
+                  {x.phone ? <a href={`tel:+960${String(x.phone).replace(/\\D/g, '').slice(-7)}`} className="discover-contact">Call {x.phone}</a> : null}
+                </article>)}
+              </div>
+            </div>
+          ) : null;
+        })}
+        <p className="small muted discover-note">Listed contacts are from public island guides. Please confirm operating hours, prices, safety and availability directly with each provider. Services are independently operated unless stated otherwise.</p>
+      </section>
+    </div>
+  );
+}
+
 const facList = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
 
 export default async function Home() {
@@ -107,6 +173,8 @@ export default async function Home() {
           </section>
         </div>
       ) : null}
+
+      <IslandGuide items={info.island_guide} />
 
       {gallery.length ? (
         <section className="section" id="gallery">
