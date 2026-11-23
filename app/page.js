@@ -91,7 +91,9 @@ function IslandGuide({ items }) {
               <h3>{g.title}</h3><p className="muted">{g.intro}</p>
               <div className="discover-grid">
                 {list.map((x, index) => <article key={`${g.id}-${index}`} className="discover-card">
-                  <div className="discover-icon" aria-hidden="true">{g.id === 'sights' ? '🌴' : g.id === 'food' ? '🍽️' : g.id === 'rides' ? '🛺' : '🧭'}</div>
+                  {x.photo_url
+                    ? <img className="discover-photo" src={x.photo_url} alt={x.name} loading="lazy" />
+                    : <div className="discover-icon" aria-hidden="true">{g.id === 'sights' ? '🌴' : g.id === 'food' ? '🍽️' : g.id === 'rides' ? '🛺' : '🧭'}</div>}
                   <div><h4>{x.name}</h4>{x.description ? <p>{x.description}</p> : null}</div>
                   {x.phone ? <a href={`tel:+960${String(x.phone).replace(/\\D/g, '').slice(-7)}`} className="discover-contact">Call {x.phone}</a> : null}
                 </article>)}
