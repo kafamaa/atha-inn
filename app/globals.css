@@ -205,3 +205,13 @@ label>input,label>select,label>textarea{margin-top:4px;color:var(--ink);font-wei
 .island-photo-editor img,.island-photo-placeholder{width:150px;height:96px;border-radius:12px;object-fit:cover;background:var(--soft)}
 .island-photo-placeholder{display:grid;place-items:center;color:var(--mute);font-size:13px}
 @media(max-width:640px){.discover-photo{width:calc(100% + 24px);height:115px;margin:-12px -12px 0;border-radius:11px 11px 0 0}}
+
+/* ATHA INN optional services */
+.services-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0}
+.service-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.service-card h3{font-size:20px}
+.service-card p{font-size:14px;color:var(--mute);margin:0}
+.service-symbol{font-size:32px;background:var(--soft);width:56px;height:56px;border-radius:15px;display:grid;place-items:center}
+.service-price{font-size:22px;font-weight:800;color:var(--lag)}
+.service-price small{font-size:13px;font-weight:500;color:var(--mute)}
+@media(max-width:760px){.services-grid{grid-template-columns:1fr;gap:10px}.service-card{padding:17px}}
