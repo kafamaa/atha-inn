@@ -163,6 +163,41 @@ export default async function Home() {
         </div>
       </section>
 
+
+      <section className="section" id="services">
+        <div className="discover-heading">
+          <div>
+            <p className="discover-eyebrow">Make your stay easier</p>
+            <h2>Additional services</h2>
+            <p className="muted">Optional services available by arrangement with ATHA INN. Prices in Maldivian Rufiyaa.</p>
+          </div>
+        </div>
+        <div className="services-grid">
+          <article className="service-card">
+            <div className="service-symbol" aria-hidden="true">🍳</div>
+            <h3>Breakfast</h3>
+            <div className="service-price">MVR 50 <small>/ room / breakfast</small></div>
+            <p>Includes up to 2 guests per room. Each extra guest adds 35% of the base price (MVR 17.50).</p>
+            <p className="small muted">For example, 3 guests: MVR 67.50. 4 guests: MVR 85 per room.</p>
+          </article>
+          <article className="service-card">
+            <div className="service-symbol" aria-hidden="true">🍽️</div>
+            <h3>Kitchen use</h3>
+            <div className="service-price">MVR 150 <small>/ use</small></div>
+            <p>Optional guesthouse kitchen access. Ask ATHA INN about equipment, timing and availability.</p>
+          </article>
+          <article className="service-card">
+            <div className="service-symbol" aria-hidden="true">🛵</div>
+            <h3>Motorcycle rental</h3>
+            <div className="service-price">MVR 250 <small>/ 24 hours</small></div>
+            <p>Explore the island at your own pace. Availability and rental conditions must be confirmed in advance.</p>
+          </article>
+        </div>
+        <div className="actions">
+          <a className="btn coral" href={waLink(wa, `Hello ${name}, I would like to ask about breakfast, kitchen use or motorcycle rental.`)} target="_blank" rel="noopener noreferrer">Ask about services on WhatsApp</a>
+        </div>
+      </section>
+
       {info.about || info.house_info || info.kitchen_info ? (
         <div className="band-sand" id="about">
           <section className="section">
