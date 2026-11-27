@@ -484,6 +484,21 @@ function BillForm({ id, kind, fromGroup }) {
   const set = (k, v) => setB((x) => ({ ...x, [k]: v }));
   const setItem = (i, k, v) => setB((x) => ({ ...x, items: x.items.map((it, j) => (j === i ? { ...it, [k]: v } : it)) }));
   const addItem = (d = '', n = 0) => setB((x) => ({ ...x, items: [...x.items, { d, q: 1, n, p: 0 }] }));
+  const [breakfastGuests, setBreakfastGuests] = useState(2);
+  const [breakfastRooms, setBreakfastRooms] = useState(1);
+  const [breakfastDays, setBreakfastDays] = useState(1);
+  const breakfastRate = Math.round((50 * (1 + Math.max(0, breakfastGuests - 2) * 0.35)) * 100) / 100;
+  const serviceRate = (amount) => b.currency === 'USD' ? r2(amount / (+st.fx || 15.42)) : amount;
+  const addBreakfast = () => setB((x) => ({
+    ...x,
+    items: [...x.items, {
+      d: `Breakfast — ${breakfastGuests} guest(s) per room`,
+      q: Math.max(1, +breakfastRooms || 1), n: Math.max(1, +breakfastDays || 1),
+      p: serviceRate(breakfastRate),
+    }],
+  }));
+  const addKitchen = () => setB((x) => ({ ...x, items: [...x.items, { d: 'Kitchen use', q: 1, n: 0, p: serviceRate(150) }] }));
+  const addMotorcycle = () => setB((x) => ({ ...x, items: [...x.items, { d: 'Motorcycle rental (24 hours)', q: 1, n: 0, p: serviceRate(250) }] }));
   const c = calc(b, st);
   const R = b.rates || st;
   async function save() {
@@ -528,7 +543,20 @@ function BillForm({ id, kind, fromGroup }) {
       <div className="row">
         <button type="button" className="btn sm" onClick={() => addItem()}>+ Extra charge</button>
         <button type="button" className="btn sm" onClick={() => addItem('Accommodation', 1)}>+ Rooms</button>
+        <button type="button" className="btn sm" onClick={addKitchen}>+ Kitchen use · MVR 150</button>
+        <button type="button" className="btn sm" onClick={addMotorcycle}>+ Motorcycle · MVR 250 / 24h</button>
         {['Airport transfer', 'Meals', 'Excursion', 'Laundry'].map((d) => <button type="button" key={d} className="btn sm" onClick={() => addItem(d)}>{d}</button>)}
+      </div>
+      <div className="card" style={{ marginTop: 12, background: 'var(--soft)' }}>
+        <h3 style={{ fontSize: 15, marginBottom: 5 }}>Add breakfast</h3>
+        <p className="small muted" style={{ marginTop: 0 }}>MVR 50 per room for up to 2 guests. Each additional guest adds 35% of the base rate (MVR 17.50). Set rooms and breakfast days below.</p>
+        <div className="fg">
+          <label>People per room<input type="number" min="1" max="30" value={breakfastGuests} onChange={(e) => setBreakfastGuests(Math.max(1, +e.target.value || 1))}/></label>
+          <label>Rooms<input type="number" min="1" max="60" value={breakfastRooms} onChange={(e) => setBreakfastRooms(Math.max(1, +e.target.value || 1))}/></label>
+          <label>Breakfast days<input type="number" min="1" max="365" value={breakfastDays} onChange={(e) => setBreakfastDays(Math.max(1, +e.target.value || 1))}/></label>
+        </div>
+        <p style={{ margin: '8px 0' }}><b>{money(serviceRate(breakfastRate * breakfastRooms * breakfastDays), b.currency)}</b> total for breakfast</p>
+        <button type="button" className="btn sm pri" onClick={addBreakfast}>+ Add breakfast to bill</button>
       </div>
       <div className="fg" style={{ marginTop: 14 }}>
         <label>Discount (amount)<input type="number" step="0.01" min="0" value={b.discount} onChange={(e) => set('discount', e.target.value)} /></label>
