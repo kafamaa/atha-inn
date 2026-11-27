@@ -16,6 +16,8 @@ function BookForm() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
+  const [extras, setExtras] = useState({ breakfast: false, kitchen: false, motorcycle: false });
+  const [breakfastGuests, setBreakfastGuests] = useState(2);
 
   useEffect(() => {
     supabase.from('public_info').select('*').maybeSingle().then(({ data }) => setInfo(data || {}));
@@ -49,7 +51,13 @@ function BookForm() {
     setBusy(true);
     if (rooms && nRooms > rooms.length) return setErr(`Only ${rooms.length} room${rooms.length === 1 ? ' is' : 's are'} free for these dates.`);
     const pref = chosen.length ? `Preferred rooms: ${chosen.map((r) => r.name).join(', ')}\n` : '';
-    const p = { ...f, message: pref + (f.message || ''), rooms: nRooms, check_in: ci, check_out: co };
+    const wants = [
+      extras.breakfast ? `Breakfast requested (${breakfastGuests} people per room; price to be confirmed)` : null,
+      extras.kitchen ? 'Kitchen use requested (MVR 150; terms to be confirmed)' : null,
+      extras.motorcycle ? 'Motorcycle rental requested (MVR 250 / 24 hours; availability to be confirmed)' : null,
+    ].filter(Boolean);
+    const extraNote = wants.length ? `Additional services:\\n${wants.join('\\n')}\\n` : '';
+    const p = { ...f, message: (pref + extraNote + (f.message || '')).slice(0, 1000), rooms: nRooms, check_in: ci, check_out: co };
     const { error } = await supabase.rpc('request_booking', { p });
     setBusy(false);
     if (error) return setErr(error.message || 'Something went wrong. Please WhatsApp us.');
@@ -101,6 +109,16 @@ function BookForm() {
           {est ? <div className="calcbox">{chosen.length} room{chosen.length > 1 ? 's' : ''} × {n} night{n === 1 ? '' : 's'} ≈ <b>{cur} {num(est)}</b> <span className="small muted">before any taxes</span></div> : null}
         </>
       )}
+
+      <h2 style={{ fontSize: 18, margin: '20px 0 10px' }}>Additional services (optional)</h2>
+      <p className="small muted" style={{ marginTop: 0 }}>Tick anything you are interested in. We'll confirm availability and the final charges before adding them to your booking.</p>
+      <div className="grid" style={{ gap: 10 }}>
+        <label className="check"><input type="checkbox" checked={extras.breakfast} onChange={(e) => setExtras((x) => ({ ...x, breakfast: e.target.checked }))}/> Breakfast — MVR 50 per room for up to 2 people</label>
+        {extras.breakfast ? <label style={{ maxWidth: 220 }}>People per room for breakfast<input type="number" min="1" max="30" value={breakfastGuests} onChange={(e) => setBreakfastGuests(Math.max(1, +e.target.value || 1))} /></label> : null}
+        {extras.breakfast && breakfastGuests > 2 ? <p className="small muted" style={{ margin: 0 }}>Extra guest surcharge: 35% of MVR 50 (MVR 17.50) per additional person. Breakfast per room: MVR {(50 + (breakfastGuests - 2) * 17.5).toFixed(2)}.</p> : null}
+        <label className="check"><input type="checkbox" checked={extras.kitchen} onChange={(e) => setExtras((x) => ({ ...x, kitchen: e.target.checked }))}/> Kitchen use — MVR 150</label>
+        <label className="check"><input type="checkbox" checked={extras.motorcycle} onChange={(e) => setExtras((x) => ({ ...x, motorcycle: e.target.checked }))}/> Motorcycle rental — MVR 250 / 24 hours</label>
+      </div>
 
       <h2 style={{ fontSize: 18, margin: '20px 0 10px' }}>Your details</h2>
       <div className="fg">
