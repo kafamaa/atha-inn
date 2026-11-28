@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { StaffCtx } from '@/lib/staffContext';
-import { addD, friendly, today } from '@/lib/util';
+import { addD, ATHA_CONTACT, ATHA_WHATSAPP, friendly, today } from '@/lib/util';
 import { SHEETS } from '@/components/Sheets';
 
 const EMPTY = { rooms: [], bookings: [], gallery: [], bills: [], txns: [], settings: {}, signature: '', staff: [] };
@@ -62,7 +62,7 @@ export default function StaffProvider({ children }) {
     if (bad) toast(friendly(bad.error));
     setData({
       rooms: q[0].data || [], bookings: q[1].data || [], gallery: q[2].data || [], bills: q[3].data || [],
-      txns: q[4].data || [], settings: q[5].data || {}, signature: q[6].data?.signature || '', staff: q[7].data || [],
+      txns: q[4].data || [], settings: { ...(q[5].data || {}), phones: ATHA_CONTACT, whatsapp: ATHA_WHATSAPP }, signature: q[6].data?.signature || '', staff: q[7].data || [],
     });
     setLoaded(true);
   }, [toast]);
