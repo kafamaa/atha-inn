@@ -1,6 +1,7 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import PublicNav from '@/components/PublicNav';
 import { addD, ATHA_WHATSAPP, today, nights, num, dL, waLink } from '@/lib/util';
@@ -18,6 +19,7 @@ function BookForm() {
   const [done, setDone] = useState(null);
   const [extras, setExtras] = useState({ breakfast: false, kitchen: false, motorcycle: false });
   const [breakfastGuests, setBreakfastGuests] = useState(2);
+  const [step, setStep] = useState(1);
 
   useEffect(() => {
     supabase.from('public_info').select('*').maybeSingle().then(({ data }) => setInfo(data || {}));
@@ -47,6 +49,7 @@ function BookForm() {
     e.preventDefault();
     setErr('');
     const f = Object.fromEntries(new FormData(e.currentTarget));
+    setStep(2);
     if (rooms && rooms.length === 0) return setErr('No rooms are free for these dates. Please try other dates or WhatsApp us.');
     setBusy(true);
     if (rooms && nRooms > rooms.length) return setErr(`Only ${rooms.length} room${rooms.length === 1 ? ' is' : 's are'} free for these dates.`);
@@ -56,21 +59,29 @@ function BookForm() {
       extras.kitchen ? 'Kitchen use requested (MVR 150; terms to be confirmed)' : null,
       extras.motorcycle ? 'Motorcycle rental requested (MVR 250 / 24 hours; availability to be confirmed)' : null,
     ].filter(Boolean);
-    const extraNote = wants.length ? `Additional services:\\n${wants.join('\\n')}\\n` : '';
+    const extraNote = wants.length ? `Additional services:\n${wants.join('\n')}\n` : '';
     const p = { ...f, message: (pref + extraNote + (f.message || '')).slice(0, 1000), rooms: nRooms, check_in: ci, check_out: co };
-    const { error } = await supabase.rpc('request_booking', { p });
+    const { data: bookingId, error } = await supabase.rpc('request_booking', { p });
     setBusy(false);
     if (error) return setErr(error.message || 'Something went wrong. Please WhatsApp us.');
-    setDone({ ...p, roomName: chosen.length ? `Room ${chosen.map((r) => r.name).join(', ')}` : `${nRooms} room${nRooms > 1 ? 's' : ''}` });
+    // Notifications are best-effort; a failed alert never means the booking failed.
+    if (bookingId) fetch('/api/booking-notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId, phone: f.phone }),
+    }).catch(() => {});
+    setDone({ ...p, bookingId, roomName: chosen.length ? `Room ${chosen.map((r) => r.name).join(', ')}` : `${nRooms} room${nRooms > 1 ? 's' : ''}` });
   }
 
   if (done) {
     const text = `Hello ${name}, I just sent a booking request: ${done.guest}, ${dL(done.check_in)} to ${dL(done.check_out)}, ${done.roomName}, ${done.adults} adult(s).`;
     return (
       <div className="card" style={{ textAlign: 'center', padding: 28 }}>
-        <h1 style={{ fontSize: 28, marginBottom: 8 }}>Request sent</h1>
+        <div className="booking-steps"><span className="done">1 · Details</span><span className="done">2 · Request sent</span><span>3 · Confirmation</span></div>
+        <h1 style={{ fontSize: 28, marginBottom: 8 }}>Request received!</h1>
         <p>Thank you, {done.guest}. We will confirm your stay from {dL(done.check_in)} to {dL(done.check_out)} by phone or WhatsApp soon.</p>
-        <p className="muted">Your booking is confirmed only after we reply.</p>
+        <p className="muted">Your booking is pending our review. A request is not yet a confirmed reservation.</p>
+        {done.bookingId ? <div className="booking-ref"><span>Booking reference</span><strong>{done.bookingId.slice(0, 8).toUpperCase()}</strong><p className="small muted">Keep your booking reference and the phone number you entered to check progress.</p></div> : null}
+        {done.bookingId ? <Link className="btn pri" href={`/track?ref=${encodeURIComponent(done.bookingId)}`}>Track booking progress</Link> : null}
         <div className="row" style={{ justifyContent: 'center' }}>
           <a className="btn coral" href={waLink(wa, text)} target="_blank" rel="noopener">Also message us on WhatsApp</a>
           <a className="btn" href="/">Back to home</a>
@@ -81,7 +92,8 @@ function BookForm() {
 
   return (
     <form className="card" onSubmit={submit}>
-      <h1 style={{ fontSize: 28, marginBottom: 6 }}>Request a booking</h1>
+      <div className="booking-steps" aria-label="Booking steps"><span className={step >= 1 ? 'done' : ''}>1 · Dates & rooms</span><span className={step >= 2 ? 'done' : ''}>2 · Your details</span><span>3 · Confirmation</span></div>
+      <h1 style={{ fontSize: 28, marginBottom: 6 }}>Request your island stay</h1>
       <p className="muted" style={{ marginTop: 0 }}>Choose your dates and how many rooms you need. We confirm every request personally.</p>
       <div className="fg">
         <label>Check-in<input type="date" required min={today()} value={ci} onChange={(e) => { setCi(e.target.value); if (co <= e.target.value) setCo(addD(e.target.value, 1)); }} /></label>
@@ -120,7 +132,7 @@ function BookForm() {
         <label className="check"><input type="checkbox" checked={extras.motorcycle} onChange={(e) => setExtras((x) => ({ ...x, motorcycle: e.target.checked }))}/> Motorcycle rental — MVR 250 / 24 hours</label>
       </div>
 
-      <h2 style={{ fontSize: 18, margin: '20px 0 10px' }}>Your details</h2>
+      <h2 style={{ fontSize: 18, margin: '20px 0 10px' }} onMouseEnter={() => setStep(2)}>Your details</h2>
       <div className="fg">
         <label>Full name<input name="guest" required maxLength={120} autoComplete="name" /></label>
         <label>Phone / WhatsApp<input name="phone" type="tel" required maxLength={40} autoComplete="tel" placeholder="+960 …" /></label>
