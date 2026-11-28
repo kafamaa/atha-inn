@@ -15,6 +15,7 @@ export default function PublicNav({ info }) {
           <Link href="/#about">About</Link>
           <Link href="/#gallery">Gallery</Link>
           <Link href="/#contact">Contact</Link>
+          <Link href="/track">Track booking</Link>
         </nav>
         <Link href="/book" className="btn coral">Book now</Link>
       </div>
