@@ -215,3 +215,83 @@ label>input,label>select,label>textarea{margin-top:4px;color:var(--ink);font-wei
 .service-price{font-size:22px;font-weight:800;color:var(--lag)}
 .service-price small{font-size:13px;font-weight:500;color:var(--mute)}
 @media(max-width:760px){.services-grid{grid-template-columns:1fr;gap:10px}.service-card{padding:17px}}
+
+/* ATHA INN 2026 visual refresh: tropical boutique hospitality */
+:root{--bg:#f6f9f8;--card:#fff;--ink:#152d30;--mute:#60777a;--line:#dde8e6;--lag:#075864;--lagbg:#064955;--coral:#df7854;--soft:#edf8f7;--sand:#f9f7f1}
+body{background:var(--bg);letter-spacing:-.012em}
+h1,h2,h3{letter-spacing:-.035em}
+button,.btn,a,input,textarea,select{transition:background-color .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 9px 24px rgba(6,60,68,.14)}
+.btn{border-radius:999px;padding-left:20px;padding-right:20px}
+.btn.pri{background:#075864}.btn.coral{background:#d96f4b;border-color:#d96f4b}
+.card{border-radius:23px;box-shadow:0 8px 36px rgba(25,64,67,.035)}
+input,select,textarea{border-radius:14px;background:#fff}
+input:focus,select:focus,textarea:focus{border-color:#4ab8b2;box-shadow:0 0 0 4px rgba(56,188,178,.12);outline:none}
+.pub-nav{background:rgba(255,255,255,.83);backdrop-filter:blur(22px) saturate(1.45);border-bottom:1px solid rgba(255,255,255,.7);box-shadow:0 8px 36px rgba(8,44,49,.045)}
+.pub-nav .wrap{max-width:1320px;padding-top:12px;padding-bottom:12px}
+.pub-nav .logo{font-size:21px;letter-spacing:-.035em}
+.pub-nav .logo img{box-shadow:0 0 0 3px #e9f5f3}
+.pub-nav nav{gap:clamp(8px,1.4vw,20px);flex-wrap:wrap;justify-content:center}
+.pub-nav nav a{font-size:13px;color:#29494c}
+.pub-nav nav a:hover{color:#0a8f8a}
+.hero{min-height:min(86vh,790px);background:linear-gradient(135deg,#83cdd2 0%,#27869b 45%,#073e4b 100%)}
+.hero:after{background:linear-gradient(90deg,rgba(2,26,31,.74),rgba(2,26,31,.23) 66%),linear-gradient(0deg,rgba(3,28,34,.65),transparent 65%)}
+.hero .copy{max-width:1320px;padding-bottom:clamp(64px,11vw,134px)}
+.hero .copy::before{content:'YOUR ISLAND ESCAPE · SH. KANDITHEEMU';display:block;letter-spacing:.18em;font-size:11px;font-weight:800;color:#e7fffb;margin-bottom:18px}
+.hero h1{font-size:clamp(58px,11vw,118px);max-width:11ch;line-height:.95;letter-spacing:-.07em;font-weight:800;text-shadow:0 10px 36px rgba(0,0,0,.15)}
+.hero p{max-width:580px;line-height:1.55;font-size:clamp(17px,2.5vw,22px);color:#f1fbfb;margin:22px 0 30px}
+.hero .btn{min-height:54px;padding:12px 25px}
+.section{max-width:1250px;padding-top:clamp(54px,7vw,100px);padding-bottom:clamp(54px,7vw,100px)}
+.section h2{font-size:clamp(31px,4.6vw,50px);letter-spacing:-.05em}
+.room-card,.service-card,.discover-card,.info-card{border:1px solid rgba(197,221,220,.8);box-shadow:0 12px 35px rgba(8,55,60,.06);transition:transform .24s ease,box-shadow .24s ease}
+.room-card:hover,.service-card:hover,.discover-card:hover{transform:translateY(-5px);box-shadow:0 22px 45px rgba(8,55,60,.12)}
+.room-card{border-radius:26px}
+.room-card .ph{overflow:hidden}
+.room-card .ph img{transition:transform .55s ease}
+.room-card:hover .ph img{transform:scale(1.06)}
+.room-card .bd{padding:24px;gap:12px}
+.room-card .price{font-size:22px;letter-spacing:-.035em}
+.services-grid{gap:20px}.service-card{border-radius:26px;padding:28px;gap:16px}
+.service-symbol{width:64px;height:64px;border-radius:19px;background:#eaf8f6}
+.discover-card{border-radius:22px}
+.discover-jumps a{border-radius:999px;padding:11px 19px;box-shadow:0 5px 18px rgba(10,50,54,.045)}
+.discover-jumps a:hover{background:#d9f3ef}
+.pub-foot{background:#073a44;padding:50px max(4vw,16px)}
+.book-wrap{max-width:840px;padding-top:40px;padding-bottom:90px}
+.book-wrap>.card,.book-wrap>form.card{padding:clamp(22px,4vw,38px)}
+.book-wrap h1{font-size:clamp(30px,5vw,43px)}
+.booking-steps{display:flex;gap:7px;margin:0 0 23px;overflow-x:auto;scrollbar-width:none}
+.booking-steps span{flex:1;min-width:max-content;padding:9px 13px;border-radius:999px;background:#e8eeec;color:#637d7c;font-size:12px;font-weight:700;text-align:center}
+.booking-steps span.done{background:#d2f1e9;color:#0e665c}
+.booking-ref{background:#e9f8f4;border:1px solid #b7e6d7;border-radius:18px;padding:16px;max-width:570px;margin:16px auto;text-align:left}
+.booking-ref span{display:block;font-size:12px;font-weight:700;color:#476d6b;text-transform:uppercase;letter-spacing:.08em}
+.booking-ref strong{font-size:17px;overflow-wrap:anywhere;display:block;margin-top:5px;font-family:ui-monospace,monospace}
+.booking-ref p{margin:6px 0 0}
+.track-hero{text-align:center;margin:0 auto 25px;max-width:660px}
+.track-hero h1{font-size:clamp(35px,7vw,55px);margin:6px 0 12px}
+.track-hero p{color:var(--mute);margin:0 auto;max-width:500px}
+.eyebrow{font-size:11px;letter-spacing:.16em;font-weight:800;color:#0d8b84}
+.track-form{margin-bottom:18px}
+.track-result{padding:clamp(22px,4vw,38px)}
+.progress-timeline{padding:12px 0 10px;list-style:none;display:grid;gap:0}
+.progress-timeline li{display:flex;gap:18px;position:relative;padding-bottom:28px;opacity:.55}
+.progress-timeline li::before{content:'';position:absolute;left:19px;top:39px;bottom:-1px;width:2px;background:#d9e5e4}
+.progress-timeline li:last-child::before{display:none}
+.progress-timeline li.complete{opacity:1}
+.progress-dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#e4ebe9;color:#5e7472;font-size:14px;font-weight:800;flex-shrink:0;z-index:1}
+.progress-timeline li.complete .progress-dot{background:#0d8479;color:#fff;box-shadow:0 5px 17px rgba(13,132,121,.23)}
+.progress-timeline strong{font-size:16px;display:block;padding-top:5px}
+.progress-timeline p{color:var(--mute);font-size:13px;margin:3px 0 0}
+@media(max-width:700px){
+ .hero{min-height:72vh}
+ .hero .copy{padding-bottom:70px}
+ .hero h1{font-size:clamp(58px,15vw,86px)}
+ .hero p{font-size:17px}
+ .room-card .bd{padding:19px}
+ .pub-nav .wrap{gap:8px}
+ .pub-nav .logo{font-size:18px}
+ .pub-nav .btn{padding-left:14px;padding-right:14px}
+ .booking-steps span{font-size:10px;padding:8px 10px}
+ .service-card{padding:20px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
