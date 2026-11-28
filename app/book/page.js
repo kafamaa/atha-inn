@@ -80,7 +80,7 @@ function BookForm() {
         <h1 style={{ fontSize: 28, marginBottom: 8 }}>Request received!</h1>
         <p>Thank you, {done.guest}. We will confirm your stay from {dL(done.check_in)} to {dL(done.check_out)} by phone or WhatsApp soon.</p>
         <p className="muted">Your booking is pending our review. A request is not yet a confirmed reservation.</p>
-        {done.bookingId ? <div className="booking-ref"><span>Booking reference</span><strong>{done.bookingId.slice(0, 8).toUpperCase()}</strong><p className="small muted">Keep your booking reference and the phone number you entered to check progress.</p></div> : null}
+        {done.bookingId ? <div className="booking-ref"><span>Booking reference</span><strong>{done.bookingId}</strong><p className="small muted">Keep your booking reference and the phone number you entered to check progress.</p></div> : null}
         {done.bookingId ? <Link className="btn pri" href={`/track?ref=${encodeURIComponent(done.bookingId)}`}>Track booking progress</Link> : null}
         <div className="row" style={{ justifyContent: 'center' }}>
           <a className="btn coral" href={waLink(wa, text)} target="_blank" rel="noopener">Also message us on WhatsApp</a>
@@ -132,7 +132,7 @@ function BookForm() {
         <label className="check"><input type="checkbox" checked={extras.motorcycle} onChange={(e) => setExtras((x) => ({ ...x, motorcycle: e.target.checked }))}/> Motorcycle rental — MVR 250 / 24 hours</label>
       </div>
 
-      <h2 style={{ fontSize: 18, margin: '20px 0 10px' }} onMouseEnter={() => setStep(2)}>Your details</h2>
+      <h2 style={{ fontSize: 18, margin: '20px 0 10px' }} >Your details</h2>
       <div className="fg">
         <label>Full name<input name="guest" required maxLength={120} autoComplete="name" /></label>
         <label>Phone / WhatsApp<input name="phone" type="tel" required maxLength={40} autoComplete="tel" placeholder="+960 …" /></label>
