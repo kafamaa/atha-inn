@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -20,12 +20,27 @@ function Tracker() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('');
+  useEffect(() => {
+    if (!status || !ref || !phone) return;
+    let active = true;
+    const timer = setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      const { data, error } = await supabase.rpc('track_booking', { booking_id: ref.trim(), guest_phone: phone.trim() });
+      if (!error && active && data) {
+        setStatus(Array.isArray(data) ? data[0] : data);
+        setLastUpdated(new Date().toLocaleTimeString());
+      }
+    }, 30000);
+    return () => { active = false; clearInterval(timer); };
+  }, [status?.status, ref, phone]);
   async function check(e) {
     e.preventDefault(); setBusy(true); setError(''); setStatus(null);
     const { data, error: err } = await supabase.rpc('track_booking', { booking_id: ref.trim(), guest_phone: phone.trim() });
     setBusy(false);
     if (err || !data || !(Array.isArray(data) ? data.length : Object.keys(data).length)) return setError('We could not find a request with that booking reference and phone number. Check both details or contact ATHA INN.');
     setStatus(Array.isArray(data) ? data[0] : data);
+    setLastUpdated(new Date().toLocaleTimeString());
   }
   const current = STEPS.findIndex((x) => x.key === status?.status);
   const cancelled = status?.status === 'cancel';
@@ -43,6 +58,7 @@ function Tracker() {
       <ol className="progress-timeline">{STEPS.map((s,i) => <li key={s.key} className={i <= current ? 'complete' : ''}>
         <div className="progress-dot">{i < current ? '✓' : i+1}</div><div><strong>{s.label}</strong><p>{s.detail}</p></div>
       </li>)}</ol>}
+      <p className="small muted">Progress refreshes every 30 seconds while this page is open.{lastUpdated ? ` Last checked at ${lastUpdated}.` : ''}</p>
       <p className="small muted">Status is updated when ATHA INN staff process your reservation. Please keep your booking reference private.</p>
       <a className="btn" href={waLink(ATHA_WHATSAPP, 'Hello ATHA INN, I would like an update on my booking.')} target="_blank" rel="noopener noreferrer">Contact us on WhatsApp</a>
     </div> : null}
