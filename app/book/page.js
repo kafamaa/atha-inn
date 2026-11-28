@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import PublicNav from '@/components/PublicNav';
-import { addD, today, nights, num, dL, waLink } from '@/lib/util';
+import { addD, ATHA_WHATSAPP, today, nights, num, dL, waLink } from '@/lib/util';
 
 function BookForm() {
   const params = useSearchParams();
@@ -37,7 +37,7 @@ function BookForm() {
   const n = nights(ci, co);
   const cur = info.base || 'MVR';
   const name = info.name || 'Atha Inn';
-  const wa = info.whatsapp || '9607587079';
+  const wa = ATHA_WHATSAPP;
   const chosen = (rooms || []).filter((r) => picks.includes(r.id));
   const nRooms = chosen.length || count;
   const est = chosen.length ? chosen.reduce((a, r) => a + r.rate * n, 0) : 0;
