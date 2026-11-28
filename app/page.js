@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import PublicNav from '@/components/PublicNav';
 import Gallery from '@/components/Gallery';
-import { num, waLink } from '@/lib/util';
+import { ATHA_CONTACT, ATHA_WHATSAPP, num, waLink } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -113,7 +113,7 @@ export default async function Home() {
   const { info, rooms, gallery } = await load();
   const name = info.name || 'Atha Inn';
   const cur = info.base || 'MVR';
-  const wa = info.whatsapp || '9607587079';
+  const wa = ATHA_WHATSAPP;
   const from = rooms.length ? Math.min(...rooms.map((r) => +r.rate || 0)) : 0;
   const roomPhotos = (id) => gallery.filter((g) => g.room_id === id && g.kind === 'photo');
   return (
@@ -226,8 +226,7 @@ export default async function Home() {
           <h2>Contact & location</h2>
           <div className="facts">
             <div className="fact"><b>Where</b>{info.address}{info.map_url ? <><br /><a href={info.map_url} target="_blank" rel="noopener">Open in Google Maps</a></> : null}</div>
-            <div className="fact"><b>Call</b>{String(info.phones || '').split(',').map((p) => p.trim()).filter(Boolean).map((p) => (
-              <div key={p}><a href={`tel:+960${p.replace(/\D/g, '').slice(-7)}`}>{p}</a></div>))}</div>
+            <div className="fact"><b>Call</b><a href="tel:+9609467278">{ATHA_CONTACT}</a></div>
             <div className="fact"><b>WhatsApp</b><a href={waLink(wa, `Hello ${name}`)} target="_blank" rel="noopener">Message us</a>{info.email ? <><br /><a href={`mailto:${info.email}`}>{info.email}</a></> : null}</div>
           </div>
           <div className="actions"><Link href="/book" className="btn coral">Request a booking</Link></div>
