@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staffContext';
-import { money, resizeImage } from '@/lib/util';
+import { ATHA_CONTACT, ATHA_WHATSAPP, money, resizeImage } from '@/lib/util';
 
 const MAX_VIDEO_MB = 50;
 
@@ -22,7 +22,7 @@ function SettingsForm({ fields, children }) {
   async function save(e) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
-    await run(supabase.from('settings').update({ ...f, updated_at: new Date().toISOString() }).eq('id', 1), 'Saved. The website updates within a minute.');
+    await run(supabase.from('settings').update({ ...f, phones: ATHA_CONTACT, whatsapp: ATHA_WHATSAPP, updated_at: new Date().toISOString() }).eq('id', 1), 'Saved. The website updates within a minute.');
   }
   return (
     <form className="card" onSubmit={save}>
@@ -30,7 +30,7 @@ function SettingsForm({ fields, children }) {
       <div className="fg">
         {fields.map(([k, label, type, ph]) => (
           <label key={k} className={type === 'area' || type === 'full' ? 'full' : ''}>{label}
-            {type === 'area' ? <textarea name={k} defaultValue={s[k] || ''} placeholder={ph} rows={5} /> : <input name={k} defaultValue={s[k] || ''} placeholder={ph} type={type === 'email' ? 'email' : 'text'} />}
+            {type === 'area' ? <textarea name={k} defaultValue={s[k] || ''} placeholder={ph} rows={5} /> : <input name={k} defaultValue={k === 'phones' ? ATHA_CONTACT : k === 'whatsapp' ? ATHA_WHATSAPP : s[k] || ''} readOnly={k === 'phones' || k === 'whatsapp'} placeholder={ph} type={type === 'email' ? 'email' : 'text'} />}
           </label>
         ))}
       </div>
@@ -279,9 +279,9 @@ export default function Website() {
         ]}><h2>Guesthouse & kitchen information</h2><p className="small muted" style={{ marginTop: 0 }}>Empty sections are hidden on the website.</p></SettingsForm>
       ) : (
         <SettingsForm fields={[
-          ['phones', 'Phone numbers'], ['whatsapp', 'WhatsApp number (with 960)'], ['email', 'Email', 'email'],
+          ['phones', 'Official phone number'], ['whatsapp', 'Official WhatsApp number'], ['email', 'Email', 'email'],
           ['address', 'Address', 'full'], ['map_url', 'Google Maps link', 'full', 'https://maps.app.goo.gl/…'],
-        ]}><h2>Contact & location</h2></SettingsForm>
+        ]}><h2>Contact & location</h2><p className="small muted">ATHA INN uses only +960 9467278 for calls and WhatsApp.</p></SettingsForm>
       )}
     </>
   );
