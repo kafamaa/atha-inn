@@ -20,6 +20,7 @@ export default function StaffProvider({ children }) {
   const [msg, setMsg] = useState('');
   const [stack, setStack] = useState([]);
   const timer = useRef(null);
+  const seenBookingIds = useRef(null);
 
   const toast = useCallback((m) => {
     setMsg(m);
@@ -68,6 +69,32 @@ export default function StaffProvider({ children }) {
   }, [toast]);
 
   useEffect(() => { if (profile) reload(); }, [profile, reload]);
+
+  // In-app staff notifications while this dashboard is open.
+  // Uses lightweight polling, without requiring paid messaging infrastructure.
+  useEffect(() => {
+    if (!profile || !loaded) return;
+    if (seenBookingIds.current === null) {
+      seenBookingIds.current = new Set(data.bookings.filter((b) => b.status === 'request').map((b) => b.id));
+    }
+    let active = true;
+    async function checkRequests() {
+      if (document.visibilityState !== 'visible') return;
+      const { data: latest, error } = await supabase.from('bookings')
+        .select('id, status, created_at').eq('status', 'request')
+        .order('created_at', { ascending: false }).limit(100);
+      if (error || !active) return;
+      const previous = seenBookingIds.current || new Set();
+      const fresh = (latest || []).filter((b) => !previous.has(b.id));
+      seenBookingIds.current = new Set((latest || []).map((b) => b.id));
+      if (fresh.length) {
+        toast(`${fresh.length} new booking request${fresh.length > 1 ? 's' : ''}! Open Reservations.`);
+        reload();
+      }
+    }
+    const poll = setInterval(checkRequests, 25000);
+    return () => { active = false; clearInterval(poll); };
+  }, [profile, loaded, reload, toast]);
 
   // run a Supabase call: shows errors, reloads data, returns data (or null on error)
   const run = useCallback(async (promise, ok) => {
